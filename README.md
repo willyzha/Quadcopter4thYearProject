@@ -1,5 +1,8 @@
 # Quadcopter4thYearProject
 
+Instructions:
+To compile code for APM install special arduino: http://ardupilot.org/dev/docs/building-ardupilot-with-arduino-windows.html
+
 Hardware Current Hardware Components:
 APM 2.6 flight controller
 4 Brushless Motors
