@@ -11,3 +11,5 @@ Useful Links:
 http://ardupilot.org/copter/docs/common-apm25-and-26-overview.html
 
 http://blog.owenson.me/build-your-own-quadcopter-flight-controller/
+
+http://blacktieaerial.com/the-physics-of-quadcopter-flight/
