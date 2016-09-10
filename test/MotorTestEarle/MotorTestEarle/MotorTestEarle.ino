@@ -26,11 +26,11 @@ long rcthr, rcyaw, rcpit, rcroll;
 
 void setup() 
 {
-  hal.rcout->set_freq(0xF, 490);
+  hal.rcout->set_freq(0xF, 50);
   
   hal.rcout->enable_mask(0xFF);
   
-  hal.scheduler->delay(1000);
+  //hal.scheduler->delay(1000);
   hal.rcout->write(MOTOR_FR, 900);
 //  hal.rcout->write(MOTOR_FL, 1000);
 //  hal.rcout->write(MOTOR_BR, 1000);
@@ -41,12 +41,12 @@ void setup()
 //  hal.rcout->write(MOTOR_FL, 2000);
 //  hal.rcout->write(MOTOR_BR, 2000);
 //  hal.rcout->write(MOTOR_BL, 2000);
-  hal.scheduler->delay(1000);
+  hal.scheduler->delay(1500);
   
   hal.rcout->write(MOTOR_FR, 900);
-  //hal.rcout->write(MOTOR_FL, 1000);
-  //hal.rcout->write(MOTOR_BR, 1000);
-  //hal.rcout->write(MOTOR_BL, 1000);
+//  hal.rcout->write(MOTOR_FL, 1000);
+//  hal.rcout->write(MOTOR_BR, 1000);
+//  hal.rcout->write(MOTOR_BL, 1000);
   hal.scheduler->delay(1000);
 }
 
@@ -82,7 +82,7 @@ void loop()
   
   // Variables to store rc input
   hal.rcout->write(MOTOR_FL, rcthr);
-  hal.rcout->write(MOTOR_FR, rcthr);
+  hal.rcout->write(MOTOR_FR, 900);
   hal.rcout->write(MOTOR_BL, rcthr);
   hal.rcout->write(MOTOR_BR, rcthr);
 
