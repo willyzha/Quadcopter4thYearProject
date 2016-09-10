@@ -32,21 +32,21 @@ void setup()
   
   //hal.scheduler->delay(1000);
   hal.rcout->write(MOTOR_FR, 900);
-//  hal.rcout->write(MOTOR_FL, 1000);
-//  hal.rcout->write(MOTOR_BR, 1000);
-//  hal.rcout->write(MOTOR_BL, 1000);
+  hal.rcout->write(MOTOR_FL, 900);
+  hal.rcout->write(MOTOR_BR, 900);
+  hal.rcout->write(MOTOR_BL, 900);
   hal.scheduler->delay(1000);
   
   hal.rcout->write(MOTOR_FR, 2000);
-//  hal.rcout->write(MOTOR_FL, 2000);
-//  hal.rcout->write(MOTOR_BR, 2000);
-//  hal.rcout->write(MOTOR_BL, 2000);
+  hal.rcout->write(MOTOR_FL, 2000);
+  hal.rcout->write(MOTOR_BR, 2000);
+  hal.rcout->write(MOTOR_BL, 2000);
   hal.scheduler->delay(1500);
   
   hal.rcout->write(MOTOR_FR, 900);
-//  hal.rcout->write(MOTOR_FL, 1000);
-//  hal.rcout->write(MOTOR_BR, 1000);
-//  hal.rcout->write(MOTOR_BL, 1000);
+  hal.rcout->write(MOTOR_FL, 900);
+  hal.rcout->write(MOTOR_BR, 900);
+  hal.rcout->write(MOTOR_BL, 900);
   hal.scheduler->delay(10000);
   
   rcthr = 900;
