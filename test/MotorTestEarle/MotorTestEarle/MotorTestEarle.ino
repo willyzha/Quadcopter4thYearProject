@@ -20,9 +20,9 @@ long map(long x, long in_min, long in_max, long out_min, long out_max)
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-long rcthr, rcyaw, rcpit, rcroll;
-//int rcthr = 1000;
-//int increment = 1;
+//long rcthr, rcyaw, rcpit, rcroll;
+int rcthr;
+int increment = 100;
 
 void setup() 
 {
@@ -47,17 +47,19 @@ void setup()
 //  hal.rcout->write(MOTOR_FL, 1000);
 //  hal.rcout->write(MOTOR_BR, 1000);
 //  hal.rcout->write(MOTOR_BL, 1000);
-  hal.scheduler->delay(1000);
+  hal.scheduler->delay(10000);
+  
+  rcthr = 900;
 }
 
 void loop() 
 { 
-  /*if (rcthr < 1000) {
-    increment = 1;
+  if (rcthr < 900) {
+    increment = 100;
   } else if (rcthr > 2000) {
-    increment = -1;
+    increment = -100;
   }
-  
+  hal.scheduler->delay(1000);
   rcthr = rcthr + increment;
   
   hal.rcout->write(MOTOR_FL, rcthr);
@@ -66,9 +68,9 @@ void loop()
   hal.rcout->write(MOTOR_BR, rcthr);
 
   hal.console->printf_P(
-            PSTR("individual read THR %ld\r\n"),
-            rcthr); */
-  uint16_t channels[8];  // array for raw channel values
+            PSTR("individual read THR %d\n"),
+            rcthr); 
+  /*uint16_t channels[8];  // array for raw channel values
   
   // Read RC channels and store in channels array
   hal.rcin->read(channels, 4);
@@ -88,7 +90,7 @@ void loop()
 
   hal.console->printf_P(
             PSTR("individual read THR %ld YAW %ld PIT %ld ROLL %ld\r\n"),
-            rcthr, rcyaw, rcpit, rcroll);
+            rcthr, rcyaw, rcpit, rcroll);*/
 }
 
 AP_HAL_MAIN();    // speci
