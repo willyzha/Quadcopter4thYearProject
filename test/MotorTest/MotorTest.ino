@@ -23,27 +23,27 @@ long rcthr, rcyaw, rcpit, rcroll;
 
 void setup() 
 {
-  hal.rcout->set_freq(0xF, 490);
+  hal.rcout->set_freq(0xF, 50);
   
   hal.rcout->enable_mask(0xFF);
   
 
-  hal.rcout->write(MOTOR_FR, 900);
-//  hal.rcout->write(MOTOR_FL, 1000);
-//  hal.rcout->write(MOTOR_BR, 1000);
-//  hal.rcout->write(MOTOR_BL, 1000);
+  hal.rcout->write(MOTOR_FR, 1000);
+  hal.rcout->write(MOTOR_FL, 1000);
+  hal.rcout->write(MOTOR_BR, 1000);
+  hal.rcout->write(MOTOR_BL, 1000);
   hal.scheduler->delay(1000);
   
   hal.rcout->write(MOTOR_FR, 2000);
-//  hal.rcout->write(MOTOR_FL, 2000);
-//  hal.rcout->write(MOTOR_BR, 2000);
-//  hal.rcout->write(MOTOR_BL, 2000);
+  hal.rcout->write(MOTOR_FL, 2000);
+  hal.rcout->write(MOTOR_BR, 2000);
+  hal.rcout->write(MOTOR_BL, 2000);
   hal.scheduler->delay(2000);
   
   hal.rcout->write(MOTOR_FR, 0);
-  //hal.rcout->write(MOTOR_FL, 1000);
-  //hal.rcout->write(MOTOR_BR, 1000);
-  //hal.rcout->write(MOTOR_BL, 1000);
+  hal.rcout->write(MOTOR_FL, 1000);
+  hal.rcout->write(MOTOR_BR, 1000);
+  hal.rcout->write(MOTOR_BL, 1000);
   hal.scheduler->delay(5000);
 }
 

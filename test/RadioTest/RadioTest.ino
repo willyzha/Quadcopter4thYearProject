@@ -29,27 +29,16 @@
 const AP_HAL::HAL& hal = AP_HAL_AVR_APM2;  // Hardware abstraction layer
 
 void setup() {
-  hal.rcout->set_freq(0xF, 50);
-  hal.rcout->enable_mask(0xFF);
-
-  //hal.scheduler->delay(1000);
-  hal.rcout->write(MOTOR_FR, RC_THR_MIN);
-  hal.rcout->write(MOTOR_FL, RC_THR_MIN);
-  hal.rcout->write(MOTOR_BR, RC_THR_MIN);
-  hal.rcout->write(MOTOR_BL, RC_THR_MIN);
-  hal.scheduler->delay(1000);
-  
-  hal.rcout->write(MOTOR_FR, RC_THR_MAX);
-  hal.rcout->write(MOTOR_FL, RC_THR_MAX);
-  hal.rcout->write(MOTOR_BR, RC_THR_MAX);
-  hal.rcout->write(MOTOR_BL, RC_THR_MAX);
-  hal.scheduler->delay(1500);
-  
-  hal.rcout->write(MOTOR_FR, RC_THR_MIN);
-  hal.rcout->write(MOTOR_FL, RC_THR_MIN);
-  hal.rcout->write(MOTOR_BR, RC_THR_MIN);
-  hal.rcout->write(MOTOR_BL, RC_THR_MIN);
-  hal.scheduler->delay(10000);
+//  Serial.begin(9600);
+//  hal.console->printf_P("Program begin...");
+//  hal.console->printf_P("This program will calibrate the ESC.");
+//
+//  hal.rcout->set_freq(0xF, 50);
+//  hal.rcout->enable_mask(0xFF);
+//
+//  hal.console->printf_P("Now writing maximum output.");
+//  hal.console->printf_P("Turn on power source, then wait 2 seconds and press any key.");
+//  hal.rcout->write(MOTOR_FR, MAX_SIGNAL);
 
   // Wait for input
 //  while (!Serial.available());
@@ -67,15 +56,17 @@ void loop() {
   // Read RC transmitter and map to sensible values  
   hal.rcin->read(channels, 8);
   
-  long rcthr = channels[2];
-  hal.rcout->write(MOTOR_FR, rcthr);
-  hal.rcout->write(MOTOR_FL, rcthr);
-  hal.rcout->write(MOTOR_BR, rcthr);
-  hal.rcout->write(MOTOR_BL, rcthr);
+  long rcthr, rcyaw, rcpit, rcroll;  // Variables to store radio in
+  
+  rcthr = channels[2];
+  rcyaw = channels[3];
+  rcpit = channels[1];
+  rcroll = channels[0];
   
   hal.console->printf_P(
-          PSTR("individual read THR %ld\n"),
-          rcthr);
+            PSTR("individual read THR %ld YAW %ld PIT %ld ROLL %ld\r\n"),
+            rcthr, rcyaw, rcpit, rcroll);
 }
 
 AP_HAL_MAIN();    // speci
+
