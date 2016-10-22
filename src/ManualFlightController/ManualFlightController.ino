@@ -17,15 +17,14 @@ const AP_HAL::HAL& hal = AP_HAL_AVR_APM2;
 AP_InertialSensor_MPU6000 ins;
 
 // Radio min/max values for each stick for my radio (worked out at beginning of article)
-#define RC_THR_MIN   917
+#define RC_THR_MIN   912
 #define RC_THR_MAX   1985
-#define RC_THR_MAX   1988
 #define RC_YAW_MIN   1000
-#define RC_YAW_MAX   1984
-#define RC_PIT_MIN   1019
-#define RC_PIT_MAX   2000
+#define RC_YAW_MAX   2000
+#define RC_PIT_MIN   1020
+#define RC_PIT_MAX   2001
 #define RC_ROL_MIN   1000
-#define RC_ROL_MAX   1997
+#define RC_ROL_MAX   2000
 
 // Motor numbers definitions
 #define MOTOR_FL   2    // Front left    
@@ -50,7 +49,7 @@ PID pids[6];
 #define PID_YAW_RATE 4
 #define PID_YAW_STAB 5
 
-boolean armed = false;
+bool armed = false;
 
 void setup() 
 {
@@ -146,6 +145,14 @@ void loop()
     hal.rcout->write(MOTOR_BL, rcthr + roll_output - pitch_output + yaw_output);
     hal.rcout->write(MOTOR_FR, rcthr - roll_output + pitch_output + yaw_output);
     hal.rcout->write(MOTOR_BR, rcthr - roll_output - pitch_output - yaw_output);
+    
+    hal.console->printf_P(
+          PSTR("individual read THR %ld YAW %ld PIT %ld ROLL %ld\r\n"),
+          rcthr + roll_output + pitch_output - yaw_output,  
+          rcthr + roll_output - pitch_output + yaw_output, 
+          rcthr - roll_output + pitch_output + yaw_output, 
+          rcthr - roll_output - pitch_output - yaw_output);
+    
   } else {
     // motors off
     hal.rcout->write(MOTOR_FL, RC_THR_MIN);
