@@ -59,16 +59,16 @@ void setup()
   hal.rcout->enable_mask(0xFF);
  
   // PID Configuration
-  pids[PID_PITCH_RATE].kP(0.7);
-  pids[PID_PITCH_RATE].kI(1);
+  pids[PID_PITCH_RATE].kP(0.26);
+  pids[PID_PITCH_RATE].kI(0.005);
   pids[PID_PITCH_RATE].imax(50);
   
-  pids[PID_ROLL_RATE].kP(0.7);
-  pids[PID_ROLL_RATE].kI(1);
+  pids[PID_ROLL_RATE].kP(0.26);
+  pids[PID_ROLL_RATE].kI(0.005);
   pids[PID_ROLL_RATE].imax(50);
 
-  pids[PID_YAW_RATE].kP(2.7);
-  pids[PID_YAW_RATE].kI(1);
+  pids[PID_YAW_RATE].kP(0.2);
+  //pids[PID_YAW_RATE].kI(1);
   pids[PID_YAW_RATE].imax(50);
 
   pids[PID_PITCH_STAB].kP(4.5);
@@ -115,7 +115,7 @@ void loop()
   float roll,pitch,yaw;  
   ins.quaternion.to_euler(&roll, &pitch, &yaw);
   roll = ToDeg(roll) ;
-  pitch = ToDeg(pitch) ;
+  pitch = ToDeg(pitch) +6;
   yaw = ToDeg(yaw) ;
   
   // Ask MPU6050 for gyro data
@@ -136,23 +136,35 @@ void loop()
     }
     
     // rate PIDS
-    long pitch_output =  (long) constrain(pids[PID_PITCH_RATE].get_pid(pitch_stab_output - gyroPitch, 1), - 500, 500);  
-    long roll_output =  (long) constrain(pids[PID_ROLL_RATE].get_pid(roll_stab_output - gyroRoll, 1), -500, 500);  
-    long yaw_output =  (long) constrain(pids[PID_YAW_RATE].get_pid(yaw_stab_output - gyroYaw, 1), -500, 500);  
+    long pitch_output =  (long) constrain(pids[PID_PITCH_RATE].get_pid(pitch_stab_output-gyroPitch, 1),-500,500);  
+    long roll_output =  (long) constrain(pids[PID_ROLL_RATE].get_pid(roll_stab_output-gyroRoll-rcroll, 1),-500,500);  
+    long yaw_output =  0;//(long) constrain(pids[PID_YAW_RATE].get_pid(yaw_stab_output - gyroYaw, 1), -500, 500);  
 
     // mix pid outputs and send to the motors.
     hal.rcout->write(MOTOR_FL, rcthr + roll_output + pitch_output - yaw_output);
-    hal.rcout->write(MOTOR_BL, rcthr + roll_output - pitch_output + yaw_output);
-    hal.rcout->write(MOTOR_FR, rcthr - roll_output + pitch_output + yaw_output);
+    //hal.rcout->write(MOTOR_BL, rcthr + roll_output - pitch_output + yaw_output);
+    //hal.rcout->write(MOTOR_FR, rcthr - roll_output + pitch_output + yaw_output);
     hal.rcout->write(MOTOR_BR, rcthr - roll_output - pitch_output - yaw_output);
     
-    hal.console->printf_P(
-          PSTR("individual read THR %ld YAW %ld PIT %ld ROLL %ld\r\n"),
-          rcthr + roll_output + pitch_output - yaw_output,  
-          rcthr + roll_output - pitch_output + yaw_output, 
-          rcthr - roll_output + pitch_output + yaw_output, 
-          rcthr - roll_output - pitch_output - yaw_output);
     
+    hal.console->printf_P(
+          PSTR("FL:%ld BR:%ld PIT:%4.1f GYROPI:%4.1f ROLL:%4.1f GRYORO:%4.1f\r\n"),
+          rcthr + roll_output + pitch_output - yaw_output, 
+          rcthr - roll_output - pitch_output - yaw_output,pitch,gyroPitch,roll,gyroRoll); 
+          
+//    hal.console->printf_P(
+//          PSTR("leftroll:%ld R:%4.2f gRo:%4.2f frontpitch:%ld P:%4.2f gPi:%4.2f\r\n"),
+//          roll_output,// + pitch_output - yaw_output,  
+//          roll,gyroRoll,
+//          pitch_output,// - pitch_output + yaw_output, 
+//          pitch,gyroPitch);// + pitch_output + yaw_output, 
+//          // - pitch_output - yaw_output);
+//  hal.console->printf_P(
+//	  PSTR("P:%4.2f  R:%4.2f Y:%4.2f\n"),
+//			  pitch,
+//			  roll,
+//			  yaw);
+
   } else {
     // motors off
     hal.rcout->write(MOTOR_FL, RC_THR_MIN);
