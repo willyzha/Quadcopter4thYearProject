@@ -40,7 +40,7 @@ void setup()
   hal.rcout->write(MOTOR_BL, 2000);
   hal.scheduler->delay(2000);
   
-  hal.rcout->write(MOTOR_FR, 0);
+  hal.rcout->write(MOTOR_FR, 1000);
   hal.rcout->write(MOTOR_FL, 1000);
   hal.rcout->write(MOTOR_BR, 1000);
   hal.rcout->write(MOTOR_BL, 1000);
@@ -64,10 +64,10 @@ void loop()
   rcroll = map(channels[0], 1006, 2001, -45, 45);
   
   // Variables to store rc input
-  hal.rcout->write(MOTOR_FL, rcthr);
-  hal.rcout->write(MOTOR_FR, rcthr);
-  hal.rcout->write(MOTOR_BL, rcthr);
-  hal.rcout->write(MOTOR_BR, rcthr);
+  hal.rcout->write(MOTOR_FL, rcthr-rcpit+rcroll);
+  hal.rcout->write(MOTOR_FR, rcthr-rcpit-rcroll);
+  hal.rcout->write(MOTOR_BL, rcthr+rcpit+rcroll);
+  hal.rcout->write(MOTOR_BR, rcthr+rcpit-rcroll);
 
   hal.console->printf_P(
             PSTR("individual read THR %ld YAW %ld PIT %ld ROLL %ld\r\n"),

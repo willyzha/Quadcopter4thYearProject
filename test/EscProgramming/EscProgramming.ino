@@ -42,11 +42,11 @@ void setup() {
   hal.rcout->enable_mask(0xFF);
 
   //hal.scheduler->delay(1000);
-  hal.rcout->write(MOTOR_FR, RC_THR_MIN);
-  hal.rcout->write(MOTOR_FL, RC_THR_MIN);
-  hal.rcout->write(MOTOR_BR, RC_THR_MIN);
-  hal.rcout->write(MOTOR_BL, RC_THR_MIN);
-  hal.scheduler->delay(1000);
+//  hal.rcout->write(MOTOR_FR, RC_THR_MIN);
+//  hal.rcout->write(MOTOR_FL, RC_THR_MIN);
+//  hal.rcout->write(MOTOR_BR, RC_THR_MIN);
+//  hal.rcout->write(MOTOR_BL, RC_THR_MIN);
+//  hal.scheduler->delay(1000);
   
   hal.rcout->write(MOTOR_FR, RC_THR_MAX);
   hal.rcout->write(MOTOR_FL, RC_THR_MAX);
