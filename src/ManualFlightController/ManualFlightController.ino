@@ -148,9 +148,10 @@ void loop()
     
     
     hal.console->printf_P(
-          PSTR("FL:%ld BR:%ld PIT:%4.1f GYROPI:%4.1f ROLL:%4.1f GRYORO:%4.1f\r\n"),
-          rcthr + roll_output + pitch_output - yaw_output, 
-          rcthr - roll_output - pitch_output - yaw_output,pitch,gyroPitch,roll,gyroRoll); 
+          PSTR("THROT:%ld FL:%ld BR:%ld PIDROLL:%ld PIDPITCH:%ld STABPITCH:%4.2f STABROLL:%4.2f PIT:%4.1f GYROPI:%4.1f ROLL:%4.1f GRYORO:%4.1f  \r\n"),
+          rcthr,
+          roll_output + pitch_output - yaw_output, 
+          -roll_output - pitch_output - yaw_output,roll_output,pitch_output,pitch_stab_output, roll_stab_output,pitch,gyroPitch,roll,gyroRoll); 
           
 //    hal.console->printf_P(
 //          PSTR("leftroll:%ld R:%4.2f gRo:%4.2f frontpitch:%ld P:%4.2f gPi:%4.2f\r\n"),

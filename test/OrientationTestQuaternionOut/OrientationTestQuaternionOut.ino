@@ -44,17 +44,31 @@ void loop()
   // Ask MPU6050 (fusion sensor) for orientation
   ins.update();
   float roll,pitch,yaw;
-  ins.quaternion.to_euler(&roll, &pitch, &yaw);
+  float q1,q2,q3,q4;
+  //ins.quaternion.to_euler(&roll, &pitch, &yaw);
+  q1=ins.quaternion.q1;
+  q2=ins.quaternion.q2;
+  q3=ins.quaternion.q3;
+  q4=ins.quaternion.q4;
+  Quaternion quat;
+  quat.q1=q1;
+  quat.q2=q2;
+  quat.q3=q3+0.06;
+  quat.q4=q4;
+  quat.to_euler(&roll, &pitch, &yaw);
+  
   roll = ToDeg(roll) ;
-  pitch = ToDeg(pitch);
+  pitch = ToDeg(pitch) ;
   yaw = ToDeg(yaw) ;
-  
-  
+  float p;
+  p=asin(2*(-q1*quat.q3-q4*q2))/0.017;
   hal.console->printf_P(
-	  PSTR("P:%4.1f  R:%4.1f Y:%4.1f\n"),
-			  pitch,
-			  roll,
-			  yaw);
+	  PSTR("P:%4.1f  p2: %4.1f q0:%4.2f  q2:%4.2f   q3:%4.2f  q1:%4.2f \n"),
+			  pitch,p,
+			  quat.q1,
+			  quat.q3,quat.q4,quat.q2);
+
+
 }
 
 AP_HAL_MAIN();
