@@ -1,9 +1,9 @@
 #include <AP_Common.h>
 #include <AP_Math.h>
 #include <AP_Param.h>
+#include <StorageManager.h>
 #include <AP_Progmem.h>
 #include <AP_ADC.h>
-#include <AP_InertialSensor.h>
 
 #include <AP_HAL.h>
 #include <AP_HAL_AVR.h>
@@ -23,10 +23,8 @@ long rcthr, rcyaw, rcpit, rcroll;
 
 void setup() 
 {
-  hal.rcout->set_freq(0xF, 50);
-  
-  hal.rcout->enable_mask(0xFF);
-  
+  hal.rcout->set_freq(0xFF, 490);
+  hal.rcout->enable_ch(0xFF);
 
   hal.rcout->write(MOTOR_FR, 1000);
   hal.rcout->write(MOTOR_FL, 1000);

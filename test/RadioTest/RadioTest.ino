@@ -2,8 +2,9 @@
 #include <AP_Math.h>
 #include <AP_Param.h>
 #include <AP_Progmem.h>
+#include <StorageManager.h>
 #include <AP_ADC.h>
-#include <AP_InertialSensor.h>
+//#include <AP_InertialSensor.h>
 
 #include <AP_HAL.h>
 #include <AP_HAL_AVR.h>
