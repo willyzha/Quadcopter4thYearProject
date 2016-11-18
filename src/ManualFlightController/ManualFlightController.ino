@@ -60,11 +60,11 @@ void setup()
  
   // PID Configuration
   pids[PID_PITCH_RATE].kP(0.26);
-  pids[PID_PITCH_RATE].kI(0.005);
+  pids[PID_PITCH_RATE].kI(0.03);
   pids[PID_PITCH_RATE].imax(50);
   
   pids[PID_ROLL_RATE].kP(0.26);
-  pids[PID_ROLL_RATE].kI(0.005);
+  pids[PID_ROLL_RATE].kI(0.03);
   pids[PID_ROLL_RATE].imax(50);
 
   pids[PID_YAW_RATE].kP(0.2);
@@ -142,8 +142,8 @@ void loop()
 
     // mix pid outputs and send to the motors.
     hal.rcout->write(MOTOR_FL, rcthr + roll_output + pitch_output - yaw_output);
-    //hal.rcout->write(MOTOR_BL, rcthr + roll_output - pitch_output + yaw_output);
-    //hal.rcout->write(MOTOR_FR, rcthr - roll_output + pitch_output + yaw_output);
+    hal.rcout->write(MOTOR_BL, rcthr + roll_output - pitch_output + yaw_output);
+    hal.rcout->write(MOTOR_FR, rcthr - roll_output + pitch_output + yaw_output);
     hal.rcout->write(MOTOR_BR, rcthr - roll_output - pitch_output - yaw_output);
     
     
