@@ -16,19 +16,40 @@
 #define MOTOR_BL   1    // back left
 #define MOTOR_BR   3    // back right
 
+// Radio min/max values for each stick for my radio (worked out at beginning of article)
+#define RC_THR_MIN   917
+#define RC_THR_MAX   1985
+#define RC_YAW_MIN   1000
+#define RC_YAW_MAX   1984
+#define RC_PIT_MIN   1019
+#define RC_PIT_MAX   2000
+#define RC_ROL_MIN   1000
+#define RC_ROL_MAX   1997
+
 const AP_HAL::HAL& hal = AP_HAL_AVR_APM2;  // Hardware abstraction layer
 
 void setup() {
-//  Serial.begin(9600);
-  hal.console->printf_P("Program begin...");
-  hal.console->printf_P("This program will calibrate the ESC.");
-
-  hal.rcout->set_freq(0xF, 490);
+  hal.rcout->set_freq(0xF, 50);
   hal.rcout->enable_mask(0xFF);
 
-  hal.console->printf_P("Now writing maximum output.");
-  hal.console->printf_P("Turn on power source, then wait 2 seconds and press any key.");
-  hal.rcout->write(MOTOR_FR, MAX_SIGNAL);
+  //hal.scheduler->delay(1000);
+  hal.rcout->write(MOTOR_FR, RC_THR_MIN);
+  hal.rcout->write(MOTOR_FL, RC_THR_MIN);
+  hal.rcout->write(MOTOR_BR, RC_THR_MIN);
+  hal.rcout->write(MOTOR_BL, RC_THR_MIN);
+  hal.scheduler->delay(1000);
+  
+  hal.rcout->write(MOTOR_FR, RC_THR_MAX);
+  hal.rcout->write(MOTOR_FL, RC_THR_MAX);
+  hal.rcout->write(MOTOR_BR, RC_THR_MAX);
+  hal.rcout->write(MOTOR_BL, RC_THR_MAX);
+  hal.scheduler->delay(1500);
+  
+  hal.rcout->write(MOTOR_FR, RC_THR_MIN);
+  hal.rcout->write(MOTOR_FL, RC_THR_MIN);
+  hal.rcout->write(MOTOR_BR, RC_THR_MIN);
+  hal.rcout->write(MOTOR_BL, RC_THR_MIN);
+  hal.scheduler->delay(10000);
 
   // Wait for input
 //  while (!Serial.available());
@@ -41,7 +62,20 @@ void setup() {
 }
 
 void loop() {  
+  uint16_t channels[8];
 
+  // Read RC transmitter and map to sensible values  
+  hal.rcin->read(channels, 8);
+  
+  long rcthr = channels[2];
+  hal.rcout->write(MOTOR_FR, rcthr);
+  hal.rcout->write(MOTOR_FL, rcthr);
+  hal.rcout->write(MOTOR_BR, rcthr);
+  hal.rcout->write(MOTOR_BL, rcthr);
+  
+  hal.console->printf_P(
+          PSTR("individual read THR %ld\n"),
+          rcthr);
 }
 
 AP_HAL_MAIN();    // speci
