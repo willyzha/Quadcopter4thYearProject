@@ -57,7 +57,7 @@
 #define STABILIZE_PITCH_P 4.5
 #define STABILIZE_YAW_P 4.5
 //////////////////////////////////////////////////////////////////////////////////////////////////
-#define rc_feel_rp 50   // controls vehicle response to user input 0 is extremely soft and 100 is extremely crisp
+#define rc_feel_rp 25   // controls vehicle response to user input 0 is extremely soft and 100 is extremely crisp
 #define ROLL_PITCH_INPUT_MAX 4500
 #define acro_yaw_p 4.5f
 #define RC_FAST_SPEED 490
@@ -65,7 +65,7 @@
 #define MAIN_LOOP_MICROS  10000
 //////////////////////////////////////////////////////////////////////////////////////////////////
 #define ARM_DELAY               20  // called at 10hz so 2 seconds
-#define DISARM_DELAY            20  // called at 10hz so 2 seconds
+#define DISARM_DELAY            10  // called at 10hz so 1 second
 #define AUTO_TRIM_DELAY         100 // called at 10hz so 10 seconds
 #define AUTO_DISARMING_DELAY    15  // called at 1hz so 15 seconds
 static uint8_t auto_disarming_counter;
@@ -133,7 +133,7 @@ void setup()
   //init_rc_in();               // sets up rc channels from radio
     rc_1.set_angle(ROLL_PITCH_INPUT_MAX);
     rc_2.set_angle(ROLL_PITCH_INPUT_MAX);
-    rc_3.set_range(AP_MOTORS_DEFAULT_MIN_THROTTLE, AP_MOTORS_DEFAULT_MAX_THROTTLE);
+    rc_3.set_range(0, AP_MOTORS_DEFAULT_MAX_THROTTLE);
     rc_4.set_angle(4500);
 
     rc_1.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
