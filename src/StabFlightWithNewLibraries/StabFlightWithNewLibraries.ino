@@ -106,6 +106,9 @@ static float G_Dt = 0.02;
 static uint32_t fast_loopTimer;
 
 static uint8_t auto_trim_counter;
+
+static int32_t baro_alt;            // barometer altitude in cm above home
+static float baro_climbrate;        // barometer climbrate in cm/s
 //////////////////////////////////////////////////////////////////////////////////////////////////
 static AP_Scheduler scheduler;
 static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
@@ -113,7 +116,9 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { arm_motors_check,     10,      10 },
     { auto_trim,            10,     140 },
     { update_altitude,      10,    1000 },    
-    { barometer_accumulate,  2,     250 }
+    { barometer_accumulate,  2,     250 },
+    { update_compass,       10,     720 },
+    { compass_accumulate,    2,     420 }
   };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,7 +138,7 @@ void setup()
   //init_rc_in();               // sets up rc channels from radio
     rc_1.set_angle(ROLL_PITCH_INPUT_MAX);
     rc_2.set_angle(ROLL_PITCH_INPUT_MAX);
-    rc_3.set_range(0, AP_MOTORS_DEFAULT_MAX_THROTTLE);
+    rc_3.set_range(AP_MOTORS_DEFAULT_MIN_THROTTLE, AP_MOTORS_DEFAULT_MAX_THROTTLE);
     rc_4.set_angle(4500);
 
     rc_1.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
@@ -170,6 +175,7 @@ void setup()
     ahrs.set_vehicle_class(AHRS_VEHICLE_COPTER);
 
     ins.init(AP_InertialSensor::COLD_START, ins_sample_rate);
+    ins.init_accel();
 
     ahrs.reset_gyro_drift();
     ahrs.set_fast_gains(true);
@@ -244,6 +250,17 @@ static void rc_loop()
  read_radio();
 
   //read_control_switch();
+   hal.console->printf_P(
+                PSTR("r:%4.1f  p:%4.1f y:%4.1f "
+                    "hdg=%.1f rc1:%4.1f  rc2:%4.1f rc3:%4.1f rc4:%4.1f\n"),
+                        ToDeg(ahrs.roll),
+                        ToDeg(ahrs.pitch),
+                        ToDeg(ahrs.yaw),
+                        compass.use_for_yaw() ? ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())) : 0.0,
+                        rc_1.control_in,
+                        rc_2.control_in,
+                        rc_3.control_in,
+                        rc_4.control_in);
 }
 
 static void arm_motors_check()
@@ -251,7 +268,7 @@ static void arm_motors_check()
     static int16_t arming_counter;
 
     // ensure throttle is down
-    if (rc_3.control_in > 0) {
+    if (rc_3.control_in > AP_MOTORS_DEFAULT_MIN_THROTTLE+1) {
         arming_counter = 0;
         return;
     }
@@ -312,6 +329,7 @@ static bool init_arm_motors()
           ahrs.set_vehicle_class(AHRS_VEHICLE_COPTER);
 
           ins.init(AP_InertialSensor::COLD_START, ins_sample_rate);
+          ins.init_accel();
 
           ahrs.reset_gyro_drift();
           ahrs.set_fast_gains(true);
@@ -407,6 +425,9 @@ static void update_altitude()
 {
     // read in baro altitude
     //read_barometer();
+        barometer.read();
+        baro_alt = barometer.get_altitude() * 100.0f;
+        baro_climbrate = barometer.get_climb_rate() * 100.0f;
 
     // read in sonar altitude
     //sonar_alt           = read_sonar();
@@ -415,6 +436,16 @@ static void update_altitude()
 static void barometer_accumulate(void)
 {
     barometer.accumulate();
+}
+
+static void update_compass(void)
+{
+    compass.set_throttle((float)rc_3.servo_out/1000.0f);
+    compass.read();    
+}
+static void compass_accumulate(void)
+{
+    compass.accumulate();    
 }
 
 static void read_radio()
