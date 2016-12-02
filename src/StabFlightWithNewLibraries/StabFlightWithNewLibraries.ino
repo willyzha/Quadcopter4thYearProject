@@ -106,14 +106,18 @@ static float G_Dt = 0.02;
 static uint32_t fast_loopTimer;
 
 static uint8_t auto_trim_counter;
+
+static int32_t baro_alt;            // barometer altitude in cm above home
+static float baro_climbrate;        // barometer climbrate in cm/s
 //////////////////////////////////////////////////////////////////////////////////////////////////
 static AP_Scheduler scheduler;
 static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { rc_loop,               1,     100 },  
-    { arm_motors_check,     10,      10 },
-    { auto_trim,            10,     140 },
+    { arm_motors_check,     10,      10 },    
     { update_altitude,      10,    1000 },    
-    { barometer_accumulate,  2,     250 }
+    { barometer_accumulate,  2,     250 },
+    { update_compass,       10,     720 },
+    { compass_accumulate,    2,     420 }
   };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -170,6 +174,7 @@ void setup()
     ahrs.set_vehicle_class(AHRS_VEHICLE_COPTER);
 
     ins.init(AP_InertialSensor::COLD_START, ins_sample_rate);
+    ins.init_accel();
 
     ahrs.reset_gyro_drift();
     ahrs.set_fast_gains(true);
@@ -215,7 +220,7 @@ void loop()
     if(!motors.armed() || rc_3.control_in <= 0) {
         attitude_control.relax_bf_rate_controller();
         attitude_control.set_yaw_target_to_current_heading();
-        attitude_control.set_throttle_out(0, false);        
+        attitude_control.set_throttle_out(0, false);   
     }
     else{
       // mix pid outputs and send to the motors.   
@@ -228,6 +233,18 @@ void loop()
       attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
       // output pilot's throttle
       attitude_control.set_throttle_out(pilot_throttle_scaled, true);
+
+         hal.console->printf_P(
+                PSTR("r:%4.1f  p:%4.1f y:%4.1f "
+                    "hdg=%.1f rc1:%d  rc2:%d rc3:%d rc4:%d\n"),
+                        ToDeg(ahrs.roll),
+                        ToDeg(ahrs.pitch),
+                        ToDeg(ahrs.yaw),
+                        ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())),
+                        rc_1.control_in,
+                        rc_2.control_in,
+                        rc_3.control_in,
+                        rc_4.control_in);
     }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -242,8 +259,8 @@ static void rc_loop()
 {
  // Read radio and 3-position switch on radio
  read_radio();
-
   //read_control_switch();
+
 }
 
 static void arm_motors_check()
@@ -381,32 +398,14 @@ static void init_disarm_motors()
     ahrs.set_armed(false);
 }
 
-static void auto_trim()
-{
-    if(auto_trim_counter > 0) {
-        auto_trim_counter--;
-
-        float roll_trim_adjustment = ToRad((float)rc_1.control_in / 4000.0f);
-        float pitch_trim_adjustment = ToRad((float)rc_2.control_in / 4000.0f);
-
-        // make sure accelerometer values impact attitude quickly
-        ahrs.set_fast_gains(true);
-
-        // add trim to ahrs object
-        ahrs.add_trim(roll_trim_adjustment, pitch_trim_adjustment, (auto_trim_counter == 0));
-
-        // on last iteration restore accel gains to normal
-        if(auto_trim_counter == 0) {
-            ahrs.set_fast_gains(false);
-        }
-    }
-}
-
 // read baro and sonar altitude at 10hz
 static void update_altitude()
 {
     // read in baro altitude
     //read_barometer();
+        barometer.read();
+        baro_alt = barometer.get_altitude() * 100.0f;
+        baro_climbrate = barometer.get_climb_rate() * 100.0f;
 
     // read in sonar altitude
     //sonar_alt           = read_sonar();
@@ -415,6 +414,16 @@ static void update_altitude()
 static void barometer_accumulate(void)
 {
     barometer.accumulate();
+}
+
+static void update_compass(void)
+{
+    compass.set_throttle((float)rc_3.servo_out/1000.0f);
+    compass.read();    
+}
+static void compass_accumulate(void)
+{
+    compass.accumulate();    
 }
 
 static void read_radio()
