@@ -144,20 +144,6 @@ void setup()
     rc_2.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
     rc_4.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
 
-  //init_rc_out();              // sets up motors and output to escs
-    motors.set_update_rate(RC_FAST_SPEED);
-    motors.set_frame_orientation(AP_MOTORS_X_FRAME);
-    motors.Init();
-    motors.set_min_throttle(AP_MOTORS_DEFAULT_MIN_THROTTLE);
-
-    read_radio();
-    // we want the input to be scaled correctly
-    rc_3.set_range_out(0,1000);
-
-    // enable output to motors
-    motors.enable();
-    motors.output_min();
-
     if (compass.init() && compass.read()) {
       ahrs.set_compass(&compass);
     }
@@ -178,6 +164,20 @@ void setup()
 
     ahrs.reset_gyro_drift();
     ahrs.set_fast_gains(true);
+
+   //init_rc_out();              // sets up motors and output to escs
+    motors.set_update_rate(RC_FAST_SPEED);
+    motors.set_frame_orientation(AP_MOTORS_X_FRAME);
+    motors.Init();
+    motors.set_min_throttle(AP_MOTORS_DEFAULT_MIN_THROTTLE);
+
+    read_radio();
+    // we want the input to be scaled correctly
+    rc_3.set_range_out(0,1000);
+
+    // enable output to motors
+    motors.enable();
+    motors.output_min();
     
 // initialise the main loop scheduler
     scheduler.init(&scheduler_tasks[0], sizeof(scheduler_tasks)/sizeof(scheduler_tasks[0]));
