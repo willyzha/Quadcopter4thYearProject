@@ -68,7 +68,6 @@
 #define DISARM_DELAY            10  // called at 10hz so 1 second
 #define AUTO_TRIM_DELAY         100 // called at 10hz so 10 seconds
 #define AUTO_DISARMING_DELAY    15  // called at 1hz so 15 seconds
-static uint8_t auto_disarming_counter;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 const AP_HAL::HAL& hal = AP_HAL_AVR_APM2;
 static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_100HZ;
@@ -105,8 +104,6 @@ static AP_InertialNav inertial_nav(ahrs, barometer, gps_glitch, baro_glitch);
 static float G_Dt = 0.02;
 static uint32_t fast_loopTimer;
 
-static uint8_t auto_trim_counter;
-
 static int32_t baro_alt;            // barometer altitude in cm above home
 static float baro_climbrate;        // barometer climbrate in cm/s
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,7 +111,6 @@ static AP_Scheduler scheduler;
 static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { rc_loop,               1,     100 },  
     { arm_motors_check,     10,      10 },
-    { auto_trim,            10,     140 },
     { update_altitude,      10,    1000 },    
     { barometer_accumulate,  2,     250 },
     { update_compass,       10,     720 },
@@ -138,7 +134,7 @@ void setup()
   //init_rc_in();               // sets up rc channels from radio
     rc_1.set_angle(ROLL_PITCH_INPUT_MAX);
     rc_2.set_angle(ROLL_PITCH_INPUT_MAX);
-    rc_3.set_range(AP_MOTORS_DEFAULT_MIN_THROTTLE, AP_MOTORS_DEFAULT_MAX_THROTTLE);
+    rc_3.set_range(0, AP_MOTORS_DEFAULT_MAX_THROTTLE);
     rc_4.set_angle(4500);
 
     rc_1.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
@@ -223,7 +219,7 @@ void loop()
         attitude_control.set_yaw_target_to_current_heading();
         attitude_control.set_throttle_out(0, false);        
     }
-    else{
+    else {
       // mix pid outputs and send to the motors.   
       get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
       // get pilot's desired yaw rate
@@ -252,15 +248,16 @@ static void rc_loop()
   //read_control_switch();
    hal.console->printf_P(
                 PSTR("r:%4.1f  p:%4.1f y:%4.1f "
-                    "hdg=%.1f rc1:%4.1f  rc2:%4.1f rc3:%4.1f rc4:%4.1f\n"),
+                    "hdg=%.1f rc1:%d  rc2:%d rc3:%d rc4:%d baro:%d \n"),
                         ToDeg(ahrs.roll),
                         ToDeg(ahrs.pitch),
                         ToDeg(ahrs.yaw),
-                        compass.use_for_yaw() ? ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())) : 0.0,
+                        ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())),
                         rc_1.control_in,
                         rc_2.control_in,
                         rc_3.control_in,
-                        rc_4.control_in);
+                        rc_4.control_in,
+                        baro_alt);
 }
 
 static void arm_motors_check()
@@ -268,7 +265,7 @@ static void arm_motors_check()
     static int16_t arming_counter;
 
     // ensure throttle is down
-    if (rc_3.control_in > AP_MOTORS_DEFAULT_MIN_THROTTLE+1) {
+    if (rc_3.control_in > 0) {
         arming_counter = 0;
         return;
     }
@@ -287,13 +284,6 @@ static void arm_motors_check()
                 // reset arming counter if arming fail
                 arming_counter = 0;
             }
-        }
-
-        // arm the motors and configure for flight
-        if (arming_counter == AUTO_TRIM_DELAY && motors.armed()) {
-            auto_trim_counter = 250;
-            // ensure auto-disarm doesn't trigger immediately
-            auto_disarming_counter = 0;
         }
     }else if (tmp < -4000) {    // full left
         // increase the counter to a maximum of 1 beyond the disarm delay
@@ -399,27 +389,6 @@ static void init_disarm_motors()
     ahrs.set_armed(false);
 }
 
-static void auto_trim()
-{
-    if(auto_trim_counter > 0) {
-        auto_trim_counter--;
-
-        float roll_trim_adjustment = ToRad((float)rc_1.control_in / 4000.0f);
-        float pitch_trim_adjustment = ToRad((float)rc_2.control_in / 4000.0f);
-
-        // make sure accelerometer values impact attitude quickly
-        ahrs.set_fast_gains(true);
-
-        // add trim to ahrs object
-        ahrs.add_trim(roll_trim_adjustment, pitch_trim_adjustment, (auto_trim_counter == 0));
-
-        // on last iteration restore accel gains to normal
-        if(auto_trim_counter == 0) {
-            ahrs.set_fast_gains(false);
-        }
-    }
-}
-
 // read baro and sonar altitude at 10hz
 static void update_altitude()
 {
@@ -455,5 +424,87 @@ static void read_radio()
     rc_3.set_pwm(hal.rcin->read(CH_3));
     rc_4.set_pwm(hal.rcin->read(CH_4));
 }
+
+//Attitude/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Returns smoothing gain to be passed into attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth
+//      result is a number from 2 to 12 with 2 being very sluggish and 12 being very crisp
+float get_smoothing_gain()
+{
+    return (2.0f + (float)rc_feel_rp/10.0f);
+}
+
+// Transform pilot's roll or pitch input into a desired lean angle
+// returns desired angle in centi-degrees
+static void get_pilot_desired_lean_angles(int16_t roll_in, int16_t pitch_in, int16_t &roll_out, int16_t &pitch_out)
+{
+    static float _scaler = 1.0;
+    static int16_t _angle_max = 0;
+
+    // range check the input
+    roll_in = constrain_int16(roll_in, -ROLL_PITCH_INPUT_MAX, ROLL_PITCH_INPUT_MAX);
+    pitch_in = constrain_int16(pitch_in, -ROLL_PITCH_INPUT_MAX, ROLL_PITCH_INPUT_MAX);
+
+    // return filtered roll if no scaling required
+    if (aparm.angle_max == ROLL_PITCH_INPUT_MAX) {
+        roll_out = roll_in;
+        pitch_out = pitch_in;
+        return;
+    }
+
+    // check if angle_max has been updated and redo scaler
+    if (aparm.angle_max != _angle_max) {
+        _angle_max = aparm.angle_max;
+        _scaler = (float)aparm.angle_max/(float)ROLL_PITCH_INPUT_MAX;
+    }
+
+    // convert pilot input to lean angle
+    roll_out = (int16_t)((float)roll_in * _scaler);
+    pitch_out = (int16_t)((float)pitch_in * _scaler);
+}
+
+// Transform pilot's yaw input into a desired heading
+// returns desired angle in centi-degrees
+static float get_pilot_desired_yaw_rate(int16_t stick_angle)
+{
+    // convert pilot input to the desired yaw rate
+    return stick_angle * acro_yaw_p;
+}
+
+
+// get_pilot_desired_throttle - transform pilot's throttle input to make cruise throttle mid stick
+// used only for manual throttle modes
+// returns throttle output 0 to 1000
+#define THROTTLE_IN_MIDDLE 500          // the throttle mid point
+#define THR_MID_DEFAULT 500 //
+static int16_t get_pilot_desired_throttle(int16_t throttle_control)
+{
+    //int16_t throttle_out;
+
+    // exit immediately in the simple cases
+    //if( throttle_control == 0 || g.throttle_mid == 500) {
+        return throttle_control;
+    //}
+/*
+    // ensure reasonable throttle values
+    throttle_control = constrain_int16(throttle_control,0,1000);
+    g.throttle_mid = constrain_int16(g.throttle_mid,300,700);
+
+    // check throttle is above, below or in the deadband
+    if (throttle_control < THROTTLE_IN_MIDDLE) {
+        // below the deadband
+        throttle_out = g.throttle_min + ((float)(throttle_control-g.throttle_min))*((float)(g.throttle_mid - g.throttle_min))/((float)(500-g.throttle_min));
+    }else if(throttle_control > THROTTLE_IN_MIDDLE) {
+        // above the deadband
+        throttle_out = g.throttle_mid + ((float)(throttle_control-500))*(float)(1000-g.throttle_mid)/500.0f;
+    }else{
+        // must be in the deadband
+        throttle_out = g.throttle_mid;
+    }
+
+    return throttle_out;
+*/
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 AP_HAL_MAIN();
 
