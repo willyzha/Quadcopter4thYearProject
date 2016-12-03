@@ -38,12 +38,12 @@
 #include <AC_P.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
-#define RATE_ROLL_P 0.15
+#define RATE_ROLL_P 0.11
 #define RATE_ROLL_I 0.1
 #define RATE_ROLL_D 0.004
 #define RATE_ROLL_IMAX 100
 
-#define RATE_PITCH_P 0.15
+#define RATE_PITCH_P 0.11
 #define RATE_PITCH_I 0.1
 #define RATE_PITCH_D 0.004
 #define RATE_PITCH_IMAX 100
@@ -234,17 +234,7 @@ void loop()
       // output pilot's throttle
       attitude_control.set_throttle_out(pilot_throttle_scaled, true);
 
-         hal.console->printf_P(
-                PSTR("r:%4.1f  p:%4.1f y:%4.1f "
-                    "hdg=%.1f rc1:%d  rc2:%d rc3:%d rc4:%d\n"),
-                        ToDeg(ahrs.roll),
-                        ToDeg(ahrs.pitch),
-                        ToDeg(ahrs.yaw),
-                        ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())),
-                        rc_1.control_in,
-                        rc_2.control_in,
-                        rc_3.control_in,
-                        rc_4.control_in);
+
     }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -260,6 +250,17 @@ static void rc_loop()
  // Read radio and 3-position switch on radio
  read_radio();
   //read_control_switch();
+           hal.console->printf_P(
+                PSTR("r:%4.1f  p:%4.1f y:%4.1f "
+                    "hdg=%.1f rc1:%d  rc2:%d rc3:%d rc4:%d\n"),
+                        ToDeg(ahrs.roll),
+                        ToDeg(ahrs.pitch),
+                        ToDeg(ahrs.yaw),
+                        ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())),
+                        rc_1.control_in,
+                        rc_2.control_in,
+                        rc_3.control_in,
+                        rc_4.control_in);
 
 }
 
