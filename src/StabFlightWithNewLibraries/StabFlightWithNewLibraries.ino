@@ -105,12 +105,22 @@ static AP_InertialNav inertial_nav(ahrs, barometer, gps_glitch, baro_glitch);
 static float G_Dt = 0.02;
 static uint32_t fast_loopTimer;
 
-static uint8_t auto_trim_counter;
-
 static int32_t baro_alt;            // barometer altitude in cm above home
 static float baro_climbrate;        // barometer climbrate in cm/s
 //////////////////////////////////////////////////////////////////////////////////////////////////
 static AP_Scheduler scheduler;
+/*
+  Frequency the task should be called at and the maximum time it's expected to take (microseconds)
+  1    = 100hz
+  2    = 50hz
+  4    = 25hz
+  10   = 10hz
+  20   = 5hz
+  33   = 3hz
+  50   = 2hz
+  100  = 1hz
+  1000 = 0.1hz
+ */
 static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { rc_loop,               1,     100 },  
     { arm_motors_check,     10,      10 },    
@@ -243,6 +253,19 @@ void loop()
     uint32_t time_available = (timer + MAIN_LOOP_MICROS) - hal.scheduler->micros();
     scheduler.run(time_available);
 
+  
+           hal.console->printf_P(
+                PSTR("r:%5.1f  p:%5.1f y:%5.1f comp=%.1f "
+                    "alt:%5.2fm                 rc1:%d rc2:%d rc3:%d rc4:%d\n"),
+                        ToDeg(ahrs.roll),
+                        ToDeg(ahrs.pitch),
+                        ToDeg(ahrs.yaw),
+                        ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())),
+                        baro_alt/100.0,
+                        rc_1.control_in,
+                        rc_2.control_in,
+                        rc_3.control_in,
+                        rc_4.control_in);
 }
 
 static void rc_loop()
@@ -250,18 +273,6 @@ static void rc_loop()
  // Read radio and 3-position switch on radio
  read_radio();
   //read_control_switch();
-           hal.console->printf_P(
-                PSTR("r:%4.1f  p:%4.1f y:%4.1f "
-                    "hdg=%.1f rc1:%d  rc2:%d rc3:%d rc4:%d\n"),
-                        ToDeg(ahrs.roll),
-                        ToDeg(ahrs.pitch),
-                        ToDeg(ahrs.yaw),
-                        ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())),
-                        rc_1.control_in,
-                        rc_2.control_in,
-                        rc_3.control_in,
-                        rc_4.control_in);
-
 }
 
 static void arm_motors_check()
@@ -277,24 +288,15 @@ static void arm_motors_check()
     int16_t tmp = rc_4.control_in;
 
     if (tmp > 4000) { // full right
-        // increase the arming counter to a maximum of 1 beyond the auto trim counter
-        if( arming_counter <= AUTO_TRIM_DELAY ) {
-            arming_counter++;
-        }
+        // increase the arming counter
+        arming_counter++;
 
-        // arm the motors and configure for flight
+        // arm the motors and configure for flight after 2 seconds
         if (arming_counter == ARM_DELAY && !motors.armed()) {
             if (!init_arm_motors()) {
                 // reset arming counter if arming fail
                 arming_counter = 0;
             }
-        }
-
-        // arm the motors and configure for flight
-        if (arming_counter == AUTO_TRIM_DELAY && motors.armed()) {
-            auto_trim_counter = 250;
-            // ensure auto-disarm doesn't trigger immediately
-            auto_disarming_counter = 0;
         }
     }else if (tmp < -4000) {    // full left
         // increase the counter to a maximum of 1 beyond the disarm delay
@@ -306,7 +308,7 @@ static void arm_motors_check()
         if (arming_counter == DISARM_DELAY && motors.armed()) {
             init_disarm_motors();
         }
-    }else{    // Yaw is centered so reset arming counter
+    }else {    // Yaw is centered so reset arming counter
         arming_counter = 0;
     }
 }
