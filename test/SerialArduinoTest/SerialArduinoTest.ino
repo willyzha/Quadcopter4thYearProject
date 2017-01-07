@@ -22,13 +22,15 @@ void loop()
         // process data
         //Serial.println(buf);
         char *str = strtok(buf," ,"); //str = roll,pitch,throttle,yaw
-        strcat(out,str);
+        strcat(out,"Flag: ");
         while (str != NULL) // loop to print out each token 
         {
           //Serial.println(str);
+          strcat(out,str);
+          strcat(out,", ");
           str = strtok(NULL," ,");  
-          strcat(out,str);  
         }
+        out[strlen(out)-2] = "\0";
         Serial.println(out);
         buf_offset = 0;
       }
@@ -36,10 +38,11 @@ void loop()
       {
         buf[buf_offset++] = c; // store in buffer and continue until newline is found
       }
+      
       totalBytes--;
+      out[0] = "\0";
     }
+    Serial.println("Garbage");
   }
-  
-  
-
 }
+
