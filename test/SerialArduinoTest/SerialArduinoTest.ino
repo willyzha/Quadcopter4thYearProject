@@ -26,6 +26,7 @@ int checkSum(char *str)
 
 void loop() 
 {
+  int timer = millis();
   int totalBytes = Serial.available();
   if(totalBytes > 0) // check to see if data is present
   {
