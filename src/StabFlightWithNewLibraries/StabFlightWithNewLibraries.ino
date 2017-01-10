@@ -33,42 +33,69 @@
 #include <AP_Motors.h>
 #include <AP_Curve.h>
 #include <AC_AttitudeControl.h>
+#include <AC_PosControl.h>
 #include <AP_Scheduler.h>
 #include <AC_PID.h>
 #include <AC_P.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
-#define RATE_ROLL_P 0.11
-#define RATE_ROLL_I 0.1
-#define RATE_ROLL_D 0.004
-#define RATE_ROLL_IMAX 100
+#define RATE_ROLL_P     0.11
+#define RATE_ROLL_I     0.1
+#define RATE_ROLL_D     0.004
+#define RATE_ROLL_IMAX  100
 
-#define RATE_PITCH_P 0.11
-#define RATE_PITCH_I 0.1
-#define RATE_PITCH_D 0.004
+#define RATE_PITCH_P    0.11
+#define RATE_PITCH_I    0.1
+#define RATE_PITCH_D    0.004
 #define RATE_PITCH_IMAX 100
 
-#define RATE_YAW_P 0.2
-#define RATE_YAW_I 0.02
-#define RATE_YAW_D 0.004
-#define RATE_YAW_IMAX 100
+#define RATE_YAW_P      0.2
+#define RATE_YAW_I      0.02
+#define RATE_YAW_D      0.004
+#define RATE_YAW_IMAX   100
 
-#define STABILIZE_ROLL_P 4.5
-#define STABILIZE_PITCH_P 4.5
-#define STABILIZE_YAW_P 4.5
+#define STABILIZE_ROLL_P    4.5
+#define STABILIZE_PITCH_P   4.5
+#define STABILIZE_YAW_P     4.5
+
+#define ALT_HOLD_P         1.0
+#define THROTTLE_RATE_P    5.0
+
+#define THROTTLE_ACCEL_P      0.50
+#define THROTTLE_ACCEL_I      1.0
+#define THROTTLE_ACCEL_D      0.0
+#define THROTTLE_ACCEL_IMAX   10
+
+#define LOITER_POS_P       1.0
+#define LOITER_RATE_P      1.0
+#define LOITER_RATE_I      0.5
+#define LOITER_RATE_D      0.0
+#define LOITER_RATE_IMAX   1000        // maximum acceleration from I term build-up in cm/s/s
 //////////////////////////////////////////////////////////////////////////////////////////////////
-#define rc_feel_rp 25   // controls vehicle response to user input 0 is extremely soft and 100 is extremely crisp
+#define rc_feel_rp          25   // controls vehicle response to user input 0 is extremely soft and 100 is extremely crisp
 #define ROLL_PITCH_INPUT_MAX 4500
-#define acro_yaw_p 4.5f
-#define RC_FAST_SPEED 490
-#define MAIN_LOOP_SECONDS 0.01
-#define MAIN_LOOP_MICROS  10000
+#define acro_yaw_p          4.5f
+#define RC_FAST_SPEED       490
+#define MAIN_LOOP_SECONDS   0.01
+#define MAIN_LOOP_MICROS    10000
 //////////////////////////////////////////////////////////////////////////////////////////////////
 #define ARM_DELAY               20  // called at 10hz so 2 seconds
 #define DISARM_DELAY            10  // called at 10hz so 1 second
 #define AUTO_TRIM_DELAY         100 // called at 10hz so 10 seconds
 #define AUTO_DISARMING_DELAY    15  // called at 1hz so 15 seconds
 static uint8_t auto_disarming_counter;
+//////////////////////////////////////////////////////////////////////////////////////////////////
+#define PILOT_VELZ_MAX     10     // maximum vertical velocity in cm/s
+#define PILOT_ACCEL_Z      10     // vertical acceleration in cm/s/s while altitude is under pilot control
+
+#define LAND_DETECTOR_TRIGGER 50    // number of 50hz iterations with near zero climb rate and low throttle that triggers landing complete.
+#define LAND_DETECTOR_MAYBE_TRIGGER   10  // number of 50hz iterations with near zero climb rate and low throttle that means we might be landed (used to reset horizontal position targets to prevent tipping over)
+#define LAND_DETECTOR_CLIMBRATE_MAX    30  // vehicle climb rate must be between -30 and +30 cm/s
+#define LAND_DETECTOR_BARO_CLIMBRATE_MAX   150  // barometer climb rate must be between -150cm/s ~ +150cm/s
+#define LAND_DETECTOR_DESIRED_CLIMBRATE_MAX    -20    // vehicle desired climb rate must be below -20cm/s
+#define LAND_DETECTOR_ROTATION_MAX 0.50f // vehicle rotation under 0.5 rad/sec is param to be considered landed
+
+#define THROTTLE_IN_MIDDLE 500.0          // the throttle mid point
 //////////////////////////////////////////////////////////////////////////////////////////////////
 const AP_HAL::HAL& hal = AP_HAL_AVR_APM2;
 static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_100HZ;
@@ -80,11 +107,19 @@ RC_Channel rc_4(CH_4);
 
 AC_PID pid_rate_roll(RATE_ROLL_P, RATE_ROLL_I,  RATE_ROLL_D, RATE_ROLL_IMAX);
 AC_PID pid_rate_pitch(RATE_PITCH_P, RATE_PITCH_I, RATE_PITCH_D, RATE_PITCH_IMAX);
-AC_PID pid_rate_yaw (RATE_YAW_P, RATE_YAW_I, RATE_YAW_D, RATE_YAW_IMAX);
+AC_PID pid_rate_yaw(RATE_YAW_P, RATE_YAW_I, RATE_YAW_D, RATE_YAW_IMAX);
 
 AC_P p_stabilize_roll(STABILIZE_ROLL_P);
 AC_P p_stabilize_pitch(STABILIZE_PITCH_P);
 AC_P p_stabilize_yaw(STABILIZE_YAW_P);
+
+AC_P p_alt_hold(ALT_HOLD_P);
+AC_P p_throttle_rate(THROTTLE_RATE_P);
+AC_PID pid_throttle_accel(THROTTLE_ACCEL_P, THROTTLE_ACCEL_I, THROTTLE_ACCEL_D, THROTTLE_ACCEL_IMAX);
+
+AC_P p_loiter_pos(LOITER_POS_P);
+AC_PID pid_loiter_rate_lat(LOITER_RATE_P, LOITER_RATE_I, LOITER_RATE_D, LOITER_RATE_IMAX);
+AC_PID pid_loiter_rate_lon(LOITER_RATE_P, LOITER_RATE_I, LOITER_RATE_D, LOITER_RATE_IMAX);
 
 AP_InertialSensor ins;
 AP_Baro_MS5611 barometer(&AP_Baro_MS5611::spi);
@@ -102,11 +137,24 @@ AC_AttitudeControl attitude_control(ahrs, aparm, motors, p_stabilize_roll, p_sta
 
 static AP_InertialNav inertial_nav(ahrs, barometer, gps_glitch, baro_glitch);
 
+AC_PosControl pos_control(ahrs, inertial_nav, motors, attitude_control,
+                        p_alt_hold, p_throttle_rate, pid_throttle_accel,
+                        p_loiter_pos, pid_loiter_rate_lat, pid_loiter_rate_lon);
+
 static float G_Dt = 0.02;
 static uint32_t fast_loopTimer;
 
+static int16_t climb_rate;
 static int32_t baro_alt;            // barometer altitude in cm above home
 static float baro_climbrate;        // barometer climbrate in cm/s
+
+static int16_t sonar_alt;
+static uint8_t sonar_alt_health;   // true if we can trust the altitude from the sonar
+static float target_sonar_alt;      // desired altitude in cm above the ground
+static struct   Location current_loc; // current location of the copter
+
+static uint16_t land_detector = LAND_DETECTOR_TRIGGER;  // we assume we are landed
+bool land_complete = true;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 static AP_Scheduler scheduler;
 /*
@@ -123,6 +171,7 @@ static AP_Scheduler scheduler;
  */
 static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { rc_loop,               1,     100 },  
+    { throttle_loop,         2,     450 },
     { arm_motors_check,     10,      10 },    
     { update_altitude,      10,    1000 },    
     { barometer_accumulate,  2,     250 },
@@ -143,6 +192,8 @@ void setup()
 //init_ardupilot();
   hal.scheduler->set_timer_speed(500);
     barometer.init();
+
+    althold_init();
 
   //init_rc_in();               // sets up rc channels from radio
     rc_1.set_angle(ROLL_PITCH_INPUT_MAX);
@@ -174,6 +225,7 @@ void setup()
 
     ahrs.reset_gyro_drift();
     ahrs.set_fast_gains(true);
+    land_complete=true;
 
    //init_rc_out();              // sets up motors and output to escs
     motors.set_update_rate(RC_FAST_SPEED);
@@ -222,30 +274,12 @@ void loop()
 
   // Run the attitude controllers    
   // update_flight_mode()
-    // stabilize_run()
-    int16_t target_roll, target_pitch;
-    float target_yaw_rate;
-    int16_t pilot_throttle_scaled;
-
-    if(!motors.armed() || rc_3.control_in <= 0) {
-        attitude_control.relax_bf_rate_controller();
-        attitude_control.set_yaw_target_to_current_heading();
-        attitude_control.set_throttle_out(0, false);   
+    if(1){
+        stabilize_run();
+    }else{
+        althold_run();
     }
-    else{
-      // mix pid outputs and send to the motors.   
-      get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
-      // get pilot's desired yaw rate
-      target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
-      // get pilot's desired throttle
-      pilot_throttle_scaled = get_pilot_desired_throttle(rc_3.control_in);
-      // call attitude controller
-      attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
-      // output pilot's throttle
-      attitude_control.set_throttle_out(pilot_throttle_scaled, true);
-
-
-    }
+     
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     scheduler.tick();
@@ -253,16 +287,96 @@ void loop()
     uint32_t time_available = (timer + MAIN_LOOP_MICROS) - hal.scheduler->micros();
     scheduler.run(time_available);
 
-  
+}
+static void stabilize_run(){
+    int16_t target_roll, target_pitch;
+    float target_yaw_rate;
+    int16_t pilot_throttle_scaled;
+
+    if(!motors.armed() || rc_3.control_in <= 0) { 
+        attitude_control.relax_bf_rate_controller();
+        attitude_control.set_yaw_target_to_current_heading();
+        attitude_control.set_throttle_out(0, false);   
+    }
+    else{
+      // Mix pid outputs and send to the motors
+
+      // get pilot's desired lean angles   
+      get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
+      // get pilot's desired yaw rate
+      target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
+      // get pilot's desired throttle
+      pilot_throttle_scaled = get_pilot_desired_throttle(rc_3.control_in);    
+
+      // call attitude controller
+      attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
+      // output pilot's throttle
+      attitude_control.set_throttle_out(pilot_throttle_scaled, true); 
+    }
+}
+static void althold_run(){
+    int16_t target_roll, target_pitch;
+    float target_yaw_rate;
+    int16_t target_climb_rate; 
+
+    if(!motors.armed()){
+        attitude_control.relax_bf_rate_controller();
+        attitude_control.set_yaw_target_to_current_heading();
+        attitude_control.set_throttle_out(0, false);   
+        pos_control.set_alt_target_to_current_alt();
+    }
+    else{
+      // Mix pid outputs and send to the motors.  
+      
+      // get pilot's desired lean angles 
+      get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
+      // get pilot's desired yaw rate
+      target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
+
+      // get pilot desired climb rate 
+      target_climb_rate = get_pilot_desired_climb_rate(rc_3.control_in);
+
+      if(land_complete && target_climb_rate > 0){
+          land_complete = false;
+
+          //set_throttle_takeoff()
+            // tell position controller to reset alt target and reset I terms
+            pos_control.init_takeoff();
+
+            // tell motors to do a slow start
+            motors.slow_start(true);
+      }
+
+      if(land_complete){
+        attitude_control.relax_bf_rate_controller();
+        attitude_control.set_yaw_target_to_current_heading();
+        attitude_control.set_throttle_out(0, false);   
+        pos_control.set_alt_target_to_current_alt();
+      }else{
+        // call attitude controller
+        attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
+
+        // call throttle controller
+        //if (sonar_alt_health >= SONAR_ALT_HEALTH_MAX) {
+                // if sonar is ok, use surface tracking
+                //target_climb_rate = get_throttle_surface_tracking(target_climb_rate, pos_control.get_alt_target(), G_Dt);
+        //}
+        pos_control.set_alt_target_from_climb_rate(target_climb_rate, G_Dt);
+        pos_control.update_z_controller();
+      }
+    }
+
            hal.console->printf_P(
                 PSTR("r:%5.1f  p:%5.1f y:%5.1f comp=%.1f "
-                    "alt:%5.2fm                 rc1:%d rc2:%d rc3:%d rc4:%d\n"),
+                    "alt:%3.0fcm        climbrate:%6dcm/s   alttarget:%3.0fcm         rc1:%6d rc2:%6d rc3:%6d rc4:%6d\n"),
                         ToDeg(ahrs.roll),
                         ToDeg(ahrs.pitch),
                         ToDeg(ahrs.yaw),
                         ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())),
-                        baro_alt/100.0,
-                        rc_1.control_in,
+                        baro_alt/1.0,
+                        target_climb_rate,
+                        pos_control.get_alt_target(),
+                        motors.armed(),
                         rc_2.control_in,
                         rc_3.control_in,
                         rc_4.control_in);
@@ -273,6 +387,15 @@ static void rc_loop()
  // Read radio and 3-position switch on radio
  read_radio();
   //read_control_switch();
+}
+// throttle_loop - should be run at 50 hz
+static void throttle_loop()
+{
+    // get altitude and climb rate from inertial lib
+    read_inertial_altitude();
+
+    // check if we've landed
+    update_land_detector();
 }
 
 static void arm_motors_check()
@@ -335,6 +458,7 @@ static bool init_arm_motors()
 
           ahrs.reset_gyro_drift();
           ahrs.set_fast_gains(true);
+          land_complete=true;
         // final check that gyros calibrated successfully
         if (!ins.gyro_calibrated_ok_all()) {
             in_arm_motors = false;
@@ -390,6 +514,8 @@ static void init_disarm_motors()
     }
     motors.armed(false);
 
+    land_complete = true;
+
     // disable inertial nav errors temporarily
     inertial_nav.ignore_next_error();
 
@@ -436,5 +562,52 @@ static void read_radio()
     rc_3.set_pwm(hal.rcin->read(CH_3));
     rc_4.set_pwm(hal.rcin->read(CH_4));
 }
+
+static void althold_init()
+{
+    // initialize vertical speeds and leash lengths
+    pos_control.set_speed_z(-PILOT_VELZ_MAX, PILOT_VELZ_MAX);
+    pos_control.set_accel_z(PILOT_ACCEL_Z);
+
+    // initialise altitude target to stopping point
+    pos_control.set_target_to_stopping_point_z();
+}
+
+static void read_inertial_altitude()
+{
+    // with inertial nav we can update the altitude and climb rate at 50hz
+    current_loc.alt = inertial_nav.get_altitude();
+    current_loc.flags.relative_alt = true;
+    climb_rate = inertial_nav.get_velocity_z();
+}
+// Checks if we have landed and updates land_complete
+static void update_land_detector()
+{
+    bool climb_rate_low = (abs(climb_rate) < LAND_DETECTOR_CLIMBRATE_MAX) && (abs(baro_climbrate) < LAND_DETECTOR_BARO_CLIMBRATE_MAX);
+    bool target_climb_rate_low = !pos_control.is_active_z() || (pos_control.get_desired_velocity().z <= LAND_DETECTOR_DESIRED_CLIMBRATE_MAX);
+    bool motor_at_lower_limit = motors.limit.throttle_lower;
+    bool throttle_low = (motors.get_throttle_out() < (THROTTLE_IN_MIDDLE/2.0f));
+    bool not_rotating_fast = (ahrs.get_gyro().length() < LAND_DETECTOR_ROTATION_MAX);
+
+    if (climb_rate_low && target_climb_rate_low && motor_at_lower_limit && throttle_low && not_rotating_fast) {
+        if (!land_complete) {
+            // increase counter until we hit the trigger then set land complete flag
+            if(land_detector < LAND_DETECTOR_TRIGGER) {
+                land_detector++;
+            }else{
+                land_complete = true;
+                land_detector = LAND_DETECTOR_TRIGGER;
+            }
+        }
+    } else {
+        // we've sensed movement up or down so reset land_detector
+        land_detector = 0;
+        // if throttle output is high then clear landing flag
+        if (motors.get_throttle_out() > (THROTTLE_IN_MIDDLE/2.0f)) {
+            land_complete = false;
+        }
+    }
+}
+
 AP_HAL_MAIN();
 
