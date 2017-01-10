@@ -1,25 +1,31 @@
 void setup() 
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
 }
 
 // serial command buffer
 char buf[255];
 char out[255];
 char full[255];
-char chs;
+int chs;
+int compareSum;
 long val[4];
 int counter;
 int buf_offset = 0;
 
-char checkSum(char *str)
+int checkSum(char *str)
 {
-  char sum = 0;
+  int sum = 0;
   int len = strlen(str);
   for(int i=0;i<len;i++)
   {
     sum += str[i];
+    //Serial.print(str[i],DEC);
+    //Serial.print(" ");
+    //Serial.println(sum,DEC);
   }
+  //Serial.println(sum);
+  
   return sum;
 }
 
@@ -31,14 +37,13 @@ void loop()
     counter = 0;
     while(totalBytes > 0) // start loop with number of bytes
     {
-      char c = (char)Serial.read(); // read next byte
+      char c = (char)Serial.read(); // read next byte    
       if(c == '\n')
       {
         buf[buf_offset] = '\0'; // null terminator
         // process data
         //Serial.println(buf);
         char *chk = strtok(buf," *,"); //obtain checkSum
-        Serial.println(chk);
         char *str = strtok(NULL," *,"); //str = roll,pitch,throttle,yaw
         strcat(out,"Flag: ");
         while (str != NULL) // loop to print out each token 
@@ -54,8 +59,11 @@ void loop()
         out[strlen(out)-2] = "\0";
         full[strlen(full)-2] = "\0";
         chs = checkSum(full);
+        //Serial.println(chk);
         Serial.println(chs);
-        if (chs == *chk)
+        sscanf(chk,"%d",&compareSum);
+        Serial.println(compareSum);
+        if (chs == compareSum)
         {
           Serial.println("Success");
           Serial.println(out);
