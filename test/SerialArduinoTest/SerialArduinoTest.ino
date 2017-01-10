@@ -20,12 +20,7 @@ int checkSum(char *str)
   for(int i=0;i<len;i++)
   {
     sum += str[i];
-    //Serial.print(str[i],DEC);
-    //Serial.print(" ");
-    //Serial.println(sum,DEC);
   }
-  //Serial.println(sum);
-  
   return sum;
 }
 
@@ -42,38 +37,37 @@ void loop()
       {
         buf[buf_offset] = '\0'; // null terminator
         // process data
-        //Serial.println(buf);
         char *chk = strtok(buf," *,"); //obtain checkSum
         char *str = strtok(NULL," *,"); //str = roll,pitch,throttle,yaw
         strcat(out,"Flag: ");
-        while (str != NULL) // loop to print out each token 
+        
+        while (str != NULL) // loop to go through each token
         {
-          //Serial.println(str);
           strcat(out,str);
           strcat(full,str);
           strcat(out,", ");
           strcat(full,", ");
-          val[counter] = strtol(str,NULL,16);
-          str = strtok(NULL," ,");  
+          val[counter++] = strtol(str,NULL,16); //saving values of each token as long
+          str = strtok(NULL," ,");
         }
+        
         out[strlen(out)-2] = "\0";
         full[strlen(full)-2] = "\0";
+
+        //calculate checksum and convert char chk into int
         chs = checkSum(full);
-        //Serial.println(chk);
-        Serial.println(chs);
         sscanf(chk,"%d",&compareSum);
-        Serial.println(compareSum);
+        //compare checksum value with value from python
         if (chs == compareSum)
         {
-          Serial.println("Success");
           Serial.println(out);
+          //set channel values using val[] from while loop
         }
         else
         {
-          Serial.println("Fail");
-          Serial.println(full);
+          Serial.println("Flag: CheckSum Fail");
         }
-        buf_offset = 0;
+        buf_offset = 0; //reset buf_offset
       }
       else // when newline is reached
       {
@@ -81,9 +75,9 @@ void loop()
       }
       
       totalBytes--;
+      //reset out and full char arrays
       out[0] = "\0";
       full[0] = "\0";
     }
-   // Serial.println("Garbage");
   }
 }
