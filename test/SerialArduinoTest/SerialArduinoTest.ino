@@ -53,15 +53,9 @@ void loop()
         
         out[strlen(out)-2] = "\0";
         full[strlen(full)-1] = "\0";
-        //Serial.print("CheckSum String: ");
-        Serial.println(full);
         //calculate checksum and convert char chk into int
         chs = checkSum(full);
-        Serial.print("Arduino Calculated: ");
-        Serial.println(chs);
         sscanf(chk,"%d",&compareSum);
-        //Serial.print("Read: ");
-        //Serial.println(chk);
         //compare checksum value with value from python
         if (chs == compareSum)
         {
