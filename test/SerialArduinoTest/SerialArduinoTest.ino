@@ -47,15 +47,18 @@ void loop()
           strcat(full,str);
           strcat(out,", ");
           strcat(full," ");
-          val[counter++] = strtol(str,NULL,16); //saving values of each token as long
+          val[counter++] = strtol(str,NULL,10); //saving values of each token as long
           str = strtok(NULL," ,");
         }
+
+        //Set string endings
+        out[strlen(out)-2] = '\0';
+        full[strlen(full)-1] = '\0';
         
-        out[strlen(out)-2] = "\0";
-        full[strlen(full)-1] = "\0";
         //calculate checksum and convert char chk into int
         chs = checkSum(full);
-        sscanf(chk,"%d",&compareSum);
+        compareSum = strtol(chk,NULL,10);
+        
         //compare checksum value with value from python
         if (chs == compareSum)
         {
@@ -73,10 +76,12 @@ void loop()
         buf[buf_offset++] = c; // store in buffer and continue until newline is found
       }
       
+      //decrease totalBytes for loop
       totalBytes--;
+      
       //reset out and full char arrays
-      out[0] = "\0";
-      full[0] = "\0";
+      out[0] = '\0';
+      full[0] = '\0';
     }
   }
 }
