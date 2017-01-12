@@ -59,6 +59,11 @@ void loop()
         chs = checkSum(full);
         compareSum = strtol(chk,NULL,10);
         
+        out[strlen(out)-2] = '\0';
+        full[strlen(full)-1] = '\0';
+        //calculate checksum and convert char chk into int
+        chs = checkSum(full);
+        compareSum = strtol(chk,NULL,10);
         //compare checksum value with value from python
         if (chs == compareSum)
         {
