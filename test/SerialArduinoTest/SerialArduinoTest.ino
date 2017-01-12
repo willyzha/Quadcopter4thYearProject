@@ -51,11 +51,11 @@ void loop()
           str = strtok(NULL," ,");
         }
         
-        out[strlen(out)-2] = "\0";
-        full[strlen(full)-1] = "\0";
+        out[strlen(out)-2] = '\0';
+        full[strlen(full)-1] = '\0';
         //calculate checksum and convert char chk into int
         chs = checkSum(full);
-        sscanf(chk,"%d",&compareSum);
+        compareSum = strtol(chk,NULL,10);
         //compare checksum value with value from python
         if (chs == compareSum)
         {
@@ -75,8 +75,8 @@ void loop()
       
       totalBytes--;
       //reset out and full char arrays
-      out[0] = "\0";
-      full[0] = "\0";
+      out[0] = '\0';
+      full[0] = '\0';
     }
   }
 }
