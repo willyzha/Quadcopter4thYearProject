@@ -332,15 +332,27 @@ static void althold_run(){
     }
     else{
       // Mix pid outputs and send to the motors.  
+      if(1)
+      {
+        // get pilot's desired lean angles 
+        get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
+        // get pilot's desired yaw rate
+        target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
+  
+        // get pilot desired climb rate 
+        target_climb_rate = get_pilot_desired_climb_rate(rc_3.control_in);
+      }
+      else
+      {
+        // get pilot's desired lean angles 
+        get_pilot_desired_lean_angles(pi_rc_1, pi_rc_2, target_roll, target_pitch);
+        // get pilot's desired yaw rate
+        target_yaw_rate = get_pilot_desired_yaw_rate(pi_rc_4);
+  
+        // get pilot desired climb rate 
+        target_climb_rate = get_pilot_desired_climb_rate(pi_rc_3);
+      }
       
-      // get pilot's desired lean angles 
-      get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
-      // get pilot's desired yaw rate
-      target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
-
-      // get pilot desired climb rate 
-      target_climb_rate = get_pilot_desired_climb_rate(rc_3.control_in);
-
       if(land_complete && target_climb_rate > 0){
           land_complete = false;
 
