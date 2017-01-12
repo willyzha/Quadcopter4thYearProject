@@ -103,7 +103,12 @@ static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor:
 RC_Channel rc_1(CH_1); 
 RC_Channel rc_2(CH_2); 
 RC_Channel rc_3(CH_3); 
-RC_Channel rc_4(CH_4); 
+RC_Channel rc_4(CH_4);
+
+int pi_rc_1;
+int pi_rc_2;
+int pi_rc_3;
+int pi_rc_4;
 
 AC_PID pid_rate_roll(RATE_ROLL_P, RATE_ROLL_I,  RATE_ROLL_D, RATE_ROLL_IMAX);
 AC_PID pid_rate_pitch(RATE_PITCH_P, RATE_PITCH_I, RATE_PITCH_D, RATE_PITCH_IMAX);
@@ -386,7 +391,10 @@ static void rc_loop()
 {
  // Read radio and 3-position switch on radio
  read_radio();
-  //read_control_switch();
+ //read_control_switch();
+ 
+ // Update the channel using values obtained from pi
+ pi_channel_update();
 }
 // throttle_loop - should be run at 50 hz
 static void throttle_loop()
@@ -608,6 +616,95 @@ static void update_land_detector()
         }
     }
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Checksum and updating channel values from the pi tracking system
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+int checkSum(char *str)
+{
+  int sum = 0;
+  int len = strlen(str);
+  for(int i=0;i<len;i++)
+  {
+    sum += str[i];
+  }
+  return sum;
+}
+
+static void pi_channel_update() 
+{
+  char buf[255];
+  char out[255];
+  int chs;
+  int compareSum;
+  long val[4];
+  int counter;
+  int buf_offset = 0;
+  int lastCheck;
+  
+  int totalBytes = hal.console->available();
+  if(totalBytes > 0) // check to see if data is present
+  {
+    counter = 0;
+    while(totalBytes > 0) // start loop with number of bytes
+    {
+      char c = (char)hal.console->read(); // read next byte    
+      if(c == '\n') // when \n is reached
+      {
+        buf[buf_offset] = '\0'; // null terminator
+        // process data
+        char *chk = strtok(buf," *,"); //obtain checkSum
+        char *str = strtok(NULL," *,"); //str = roll,pitch,throttle,yaw
+        
+        while (str != NULL) // loop to go through each token
+        {
+          strcat(out,str);
+          strcat(out," ");
+          val[counter++] = strtol(str,NULL,10); //saving values of each token as long
+          str = strtok(NULL," ,");
+        }
+
+        //Set string endings
+        out[strlen(out)-1] = '\0';
+        
+        //calculate checksum and convert char chk into int
+        chs = checkSum(out);
+        compareSum = strtol(chk,NULL,10);
+        
+        //compare checksum value with value from python
+        if (chs == compareSum)
+        {
+          hal.console->printf("Flag: %s\n", out);
+          //set channel values using val[0] to val[3]
+          pi_rc_1 = val[0]; // roll
+          pi_rc_2 = val[1]; // pitch
+          pi_rc_3 = val[2]; // throttle
+          pi_rc_4 = val[3]; // yaw
+        }
+        else
+        {
+          hal.console->printf("Flag: CheckSum Fail\n");
+        }
+        buf_offset = 0; //reset buf_offset
+      }
+      else //c is not \n
+      {
+        buf[buf_offset++] = c; // store in buffer and continue until newline is found
+      }
+      
+      //decrease totalBytes for loop
+      totalBytes--;
+      
+      //reset out and full char arrays
+      out[0] = '\0';
+    }
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Checksum and updating channel values from the pi tracking system
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 AP_HAL_MAIN();
 
