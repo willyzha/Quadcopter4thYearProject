@@ -44,6 +44,10 @@ static void send_data(char* info)
 
 static void update_channel(int a, int b, int c, int d)
 {
+  char values[255];
+  char valBuffer[5];
+  values[0] = '\0';
+  valBuffer[0] = '\0';
   if (a == 9999)
   {
     pi_rc_2 = b;
@@ -75,6 +79,15 @@ static void update_channel(int a, int b, int c, int d)
     pi_rc_3 = c;
     pi_rc_4 = d;
   }
+  strcat(values,itoa(pi_rc_1,valBuffer,10));
+  strcat(values," ");
+  strcat(values,itoa(pi_rc_2,valBuffer,10));
+  strcat(values," ");
+  strcat(values,itoa(pi_rc_3,valBuffer,10));
+  strcat(values," ");
+  strcat(values,itoa(pi_rc_4,valBuffer,10));
+  send_data(values);
+  
 }
 
 
@@ -89,7 +102,7 @@ void loop()
       char c = (char)Serial.read(); // read next byte    
       if(c == '\n') // when \n is reached
       {
-        out[0] = '\0'; //reset out char arrays
+        out[0] = '\0'; //reset out char array
         buf[buf_offset] = '\0'; // null terminator
         // process data
         char *chk = strtok(buf," *,"); //obtain checkSum
@@ -104,7 +117,7 @@ void loop()
           val[counter++] = strtol(str,NULL,10); //saving values of each token as long
           str = strtok(NULL," ,");
           strcat(out," ");
-          val[counter++] = strtol(str,NULL,16); //saving values of each token as long
+          val[counter++] = strtol(str,NULL,10); //saving values of each token as long
           str = strtok(NULL," *,");
         }
 
@@ -124,7 +137,6 @@ void loop()
         //compare checksum value with value from python
         if (chs == compareSum)
         {
-          send_data(out);
           //set channel values using val[] from while loop
           update_channel(val[0], val[1], val[2], val[3]);
         }
