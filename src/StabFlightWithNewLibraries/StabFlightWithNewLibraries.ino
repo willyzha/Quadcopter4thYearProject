@@ -644,6 +644,54 @@ int checkSum(char *str)
   return sum;
 }
 
+static void send_data(char* info)
+{
+  char sent[255];
+  int sum = checkSum(info);
+  char sumBuffer[5]; 
+  sent[0] = '\0';
+  itoa(sum,sumBuffer,10);
+  strcat(sent,sumBuffer);
+  strcat(sent,"*Flag: ");
+  strcat(sent,info);
+  hal.console->printf(sent);  
+}
+
+static void update_channel(int a, int b, int c, int d)
+{
+  if (a == 9999)
+  {
+    pi_rc_2 = b;
+    pi_rc_3 = c;
+    pi_rc_4 = d;
+  }
+  else if (b == 9999)
+  {
+    pi_rc_1 = a;
+    pi_rc_3 = c;
+    pi_rc_4 = d;          
+  }
+  else if (c == 9999)
+  {
+    pi_rc_1 = a;
+    pi_rc_2 = b;
+    pi_rc_4 = d;
+  }
+  else if (d == 9999)
+  {
+    pi_rc_1 = a;
+    pi_rc_2 = b;
+    pi_rc_3 = c;  
+  }
+  else
+  {
+    pi_rc_1 = a;
+    pi_rc_2 = b;
+    pi_rc_3 = c;
+    pi_rc_4 = d;
+  }
+}
+
 static void pi_channel_update() 
 {
   char buf[255];
@@ -664,6 +712,7 @@ static void pi_channel_update()
       char c = (char)hal.console->read(); // read next byte    
       if(c == '\n') // when \n is reached
       {
+		out[0] = '\0'; //reset out char array
         buf[buf_offset] = '\0'; // null terminator
         // process data
         char *chk = strtok(buf," *,"); //obtain checkSum
@@ -687,16 +736,13 @@ static void pi_channel_update()
         //compare checksum value with value from python
         if (chs == compareSum)
         {
-          hal.console->printf("Flag: %s\n", out);
-          //set channel values using val[0] to val[3]
-          pi_rc_1 = val[0]; // roll
-          pi_rc_2 = val[1]; // pitch
-          pi_rc_3 = val[2]; // throttle
-          pi_rc_4 = val[3]; // yaw
+          send_data(out);
+          //set channel values using val[] from while loop
+          update_channel(val[0], val[1], val[2], val[3]);
         }
         else
         {
-          hal.console->printf("Flag: CheckSum Fail\n");
+          send_data("CheckSum Failed");
         }
         buf_offset = 0; //reset buf_offset
       }
@@ -708,8 +754,8 @@ static void pi_channel_update()
       //decrease totalBytes for loop
       totalBytes--;
       
-      //reset out and full char arrays
-      out[0] = '\0';
+      out[0] = '\0'; //reset out char array
+      
     }
   }
 }
