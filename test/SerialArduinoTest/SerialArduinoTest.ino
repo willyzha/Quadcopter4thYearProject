@@ -14,7 +14,7 @@ char out[255];
 
 int chs;
 int compareSum;
-int val[4];
+int val[10];
 int counter;
 int buf_offset = 0;
 
@@ -37,7 +37,7 @@ static void send_data(char* info)
   sent[0] = '\0';
   itoa(sum,sumBuffer,10);
   strcat(sent,sumBuffer);
-  strcat(sent,"*Flag: ");
+  strcat(sent," Flag: ");
   strcat(sent,info);
   Serial.println(sent);  
 }
@@ -105,27 +105,25 @@ void loop()
         out[0] = '\0'; //reset out char array
         buf[buf_offset] = '\0'; // null terminator
         // process data
-        char *chk = strtok(buf," *,"); //obtain checkSum
-        char *str = strtok(NULL," *,"); //str = roll,pitch,throttle,yaw
-        
+        char *chk = strtok(buf," "); //obtain checkSum
+        compareSum = atoi(chk);
+        char *str = strtok(NULL," "); //str = roll,pitch,throttle,yaw
         while (str != NULL) // loop to go through each token
         {
           strcat(out,str);
           strcat(out," ");
-          val[counter++] = strtol(str,NULL,10); //saving values of each token as long
-          str = strtok(NULL," *,");
+          val[counter++] = atoi(str); //saving values of each token as long
+          str = strtok(NULL," ");
         }
         
         out[strlen(out)-1] = '\0';
-       
         //calculate checksum and convert char chk into int
         chs = checkSum(out);
-        compareSum = strtol(chk,NULL,10);
         //compare checksum value with value from python
         if (chs == compareSum)
         {
           //set channel values using val[] from while loop
-          update_channel(val[0], val[1], val[2], val[3]);
+          update_channel(val[1], val[2], val[3], val[4]);
         }
         else
         {
