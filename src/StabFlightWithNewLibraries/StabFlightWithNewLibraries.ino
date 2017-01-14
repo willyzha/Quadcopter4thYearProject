@@ -633,6 +633,34 @@ static void update_land_detector()
 //Checksum and updating channel values from the pi tracking system
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+void myprintf(const char *format, ...) {
+	va_list arg;
+	int checksum;
+	char str[32];
+	char output[255];
+	char buff[5];
+        char calc[255];
+
+        str[0] = '\0';
+        output[0] = '\0';
+        buff[0] = '\0';
+        calc[0] = '\0';
+        
+	va_start (arg, format);
+	hal.util->vsnprintf(str, sizeof(str), format, arg);
+        strcat(calc,"Flag: ");
+        strcat(calc,str);
+	checksum = checkSum(calc);
+	itoa(checksum, buff, 10);
+        strcat(output,"\n");
+	strcat(output, buff);
+	strcat(output, " ");
+        strcat(output, "Flag: ");
+	strcat(output, str);
+	hal.console->printf(output, arg);
+	va_end(arg);
+}
+
 int checkSum(char *str)
 {
   int sum = 0;
@@ -644,26 +672,8 @@ int checkSum(char *str)
   return sum;
 }
 
-static void send_data(char* info)
-{
-  char sent[255];
-  int sum = checkSum(info);
-  char sumBuffer[5]; 
-  sent[0] = '\0';
-  itoa(sum,sumBuffer,10);
-  strcat(sent,sumBuffer);
-  strcat(sent,"*Flag: ");
-  strcat(sent,info);
-  hal.console->printf(sent);  
-}
-
 static void update_channel(int a, int b, int c, int d)
-{
-  char values[255];
-  char valBuffer[5];
-  values[0] = '\0';
-  valBuffer[0] = '\0';
-  
+{  
   if (a == 9999)
   {
     pi_rc_2 = b;
@@ -694,17 +704,9 @@ static void update_channel(int a, int b, int c, int d)
     pi_rc_2 = b;
     pi_rc_3 = c;
     pi_rc_4 = d;
-  }
-  strcat(values,itoa(pi_rc_1,valBuffer,10));
-  strcat(values," ");
-  strcat(values,itoa(pi_rc_2,valBuffer,10));
-  strcat(values," ");
-  strcat(values,itoa(pi_rc_3,valBuffer,10));
-  strcat(values," ");
-  strcat(values,itoa(pi_rc_4,valBuffer,10));
-  
+  }  
   //print out the values
-  send_data(values);
+  myprintf("%d %d %d %d", pi_rc_1, pi_rc_2, pi_rc_3, pi_rc_4);
 }
 
 static void pi_channel_update() 
@@ -713,7 +715,9 @@ static void pi_channel_update()
   char out[255];
   int chs;
   int compareSum;
-  long val[4];
+  int tempVal[4];
+  int valBuffer[8];
+  int val[4];
   int counter;
   int buf_offset = 0;
   int lastCheck;
@@ -727,36 +731,45 @@ static void pi_channel_update()
       char c = (char)hal.console->read(); // read next byte    
       if(c == '\n') // when \n is reached
       {
-		out[0] = '\0'; //reset out char array
+	out[0] = '\0'; //reset out char array
         buf[buf_offset] = '\0'; // null terminator
         // process data
-        char *chk = strtok(buf," *,"); //obtain checkSum
-        char *str = strtok(NULL," *,"); //str = roll,pitch,throttle,yaw
+        char *chk = strtok(buf," "); //obtain checkSum
+        char *str = strtok(NULL," "); //str = roll,pitch,throttle,yaw
         
         while (str != NULL) // loop to go through each token
         {
           strcat(out,str);
           strcat(out," ");
-          val[counter++] = strtol(str,NULL,10); //saving values of each token as long
-          str = strtok(NULL," ,");
+          valBuffer[counter++] = atoi(str); //saving values of each token as long
+          str = strtok(NULL," ");
         }
 
         //Set string endings
         out[strlen(out)-1] = '\0';
-        
+
         //calculate checksum and convert char chk into int
         chs = checkSum(out);
         compareSum = strtol(chk,NULL,10);
-        
+
         //compare checksum value with value from python
         if (chs == compareSum)
         {
           //set channel values using val[] from while loop
+          for (int i=0;i<4;i++)
+          {
+            val[i] = valBuffer[i+1];
+            tempVal[i] = val[i];
+          }
           update_channel(val[0], val[1], val[2], val[3]);
         }
         else
         {
-          send_data("CheckSum Failed");
+          for(int i=0;i<4;i++)
+          {
+            valBuffer[i+1]=tempVal[i];
+          }
+          myprintf("CheckSum Failed");
         }
         buf_offset = 0; //reset buf_offset
       }
@@ -767,9 +780,7 @@ static void pi_channel_update()
       
       //decrease totalBytes for loop
       totalBytes--;
-      
-      out[0] = '\0'; //reset out char array
-      
+      out[0] = '\0'; //reset out char array 
     }
   }
 }
