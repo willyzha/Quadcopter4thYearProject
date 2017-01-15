@@ -37,6 +37,7 @@
 #include <AP_Scheduler.h>
 #include <AC_PID.h>
 #include <AC_P.h>
+#include <ctype.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 #define RATE_ROLL_P     0.11
@@ -672,6 +673,18 @@ int checkSum(char *str)
   return sum;
 }
 
+int numbers(char *c)
+{
+  while (*c)
+ {
+    if (isdigit(*c++) == 0)
+    {
+      return 0;
+    }
+ } 
+ return 1;
+}
+
 static void update_channel(int a, int b, int c, int d)
 {  
   if (a == 9999)
@@ -736,7 +749,6 @@ static void pi_channel_update()
         // process data
         char *chk = strtok(buf," "); //obtain checkSum
         char *str = strtok(NULL," "); //str = roll,pitch,throttle,yaw
-        
         while (str != NULL) // loop to go through each token
         {
           strcat(out,str);
@@ -744,16 +756,19 @@ static void pi_channel_update()
           valBuffer[counter++] = atoi(str); //saving values of each token as long
           str = strtok(NULL," ");
         }
-
+        
         //Set string endings
         out[strlen(out)-1] = '\0';
 
         //calculate checksum and convert char chk into int
         chs = checkSum(out);
-        compareSum = strtol(chk,NULL,10);
-
+        compareSum = atoi(chk);
         //compare checksum value with value from python
-        if (chs == compareSum)
+        if (numbers(chk) == 0)
+        {
+          myprintf("CheckSum Failed");
+        }
+        else if (chs == compareSum)
         {
           //set channel values using val[] from while loop
           for (int i=0;i<4;i++)
