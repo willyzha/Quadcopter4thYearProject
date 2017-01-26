@@ -37,6 +37,7 @@
 #include <AP_Scheduler.h>
 #include <AC_PID.h>
 #include <AC_P.h>
+#include <ctype.h>
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 #define RATE_ROLL_P     0.11
@@ -103,7 +104,12 @@ static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor:
 RC_Channel rc_1(CH_1); 
 RC_Channel rc_2(CH_2); 
 RC_Channel rc_3(CH_3); 
-RC_Channel rc_4(CH_4); 
+RC_Channel rc_4(CH_4);
+
+int pi_rc_1;
+int pi_rc_2;
+int pi_rc_3;
+int pi_rc_4;
 
 AC_PID pid_rate_roll(RATE_ROLL_P, RATE_ROLL_I,  RATE_ROLL_D, RATE_ROLL_IMAX);
 AC_PID pid_rate_pitch(RATE_PITCH_P, RATE_PITCH_I, RATE_PITCH_D, RATE_PITCH_IMAX);
@@ -333,15 +339,27 @@ static void althold_run(){
     }
     else{
       // Mix pid outputs and send to the motors.  
+      if(1)
+      {
+        // get pilot's desired lean angles 
+        get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
+        // get pilot's desired yaw rate
+        target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
+  
+        // get pilot desired climb rate 
+        target_climb_rate = get_pilot_desired_climb_rate(rc_3.control_in);
+      }
+      else
+      {
+        // get pilot's desired lean angles 
+        get_pilot_desired_lean_angles(pi_rc_1, pi_rc_2, target_roll, target_pitch);
+        // get pilot's desired yaw rate
+        target_yaw_rate = get_pilot_desired_yaw_rate(pi_rc_4);
+  
+        // get pilot desired climb rate 
+        target_climb_rate = get_pilot_desired_climb_rate(pi_rc_3);
+      }
       
-      // get pilot's desired lean angles 
-      get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
-      // get pilot's desired yaw rate
-      target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
-
-      // get pilot desired climb rate 
-      target_climb_rate = get_pilot_desired_climb_rate(rc_3.control_in);
-
       if(land_complete && target_climb_rate > 0){
           land_complete = false;
 
@@ -391,7 +409,10 @@ static void rc_loop()
 {
  // Read radio and 3-position switch on radio
  read_radio();
-  //read_control_switch();
+ //read_control_switch();
+ 
+ // Update the channel using values obtained from pi
+ pi_channel_update();
 }
 // throttle_loop - should be run at 50 hz
 static void throttle_loop()
@@ -614,6 +635,7 @@ static void update_land_detector()
     }
 }
 
+<<<<<<< HEAD
 static float read_sonar()
 {
     // Turn off Barometer to avoid bus collisions
@@ -640,5 +662,181 @@ static float read_sonar()
   return distance;
 }
 
+=======
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Checksum and updating channel values from the pi tracking system
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void myprintf(const char *format, ...) {
+	va_list arg;
+	int checksum;
+	char str[32];
+	char output[255];
+	char buff[5];
+        char calc[255];
+
+        str[0] = '\0';
+        output[0] = '\0';
+        buff[0] = '\0';
+        calc[0] = '\0';
+        
+	va_start (arg, format);
+	hal.util->vsnprintf(str, sizeof(str), format, arg);
+        strcat(calc,"Flag: ");
+        strcat(calc,str);
+	checksum = checkSum(calc);
+	itoa(checksum, buff, 10);
+        strcat(output,"\n");
+	strcat(output, buff);
+	strcat(output, " ");
+        strcat(output, "Flag: ");
+	strcat(output, str);
+	hal.console->printf(output, arg);
+	va_end(arg);
+}
+
+int checkSum(char *str)
+{
+  int sum = 0;
+  int len = strlen(str);
+  for(int i=0;i<len;i++)
+  {
+    sum += str[i];
+  }
+  return sum;
+}
+
+int numbers(char *c)
+{
+  while (*c)
+ {
+    if (isdigit(*c++) == 0)
+    {
+      return 0;
+    }
+ } 
+ return 1;
+}
+
+static void update_channel(int a, int b, int c, int d)
+{  
+  if (a == 9999)
+  {
+    pi_rc_2 = b;
+    pi_rc_3 = c;
+    pi_rc_4 = d;
+  }
+  else if (b == 9999)
+  {
+    pi_rc_1 = a;
+    pi_rc_3 = c;
+    pi_rc_4 = d;          
+  }
+  else if (c == 9999)
+  {
+    pi_rc_1 = a;
+    pi_rc_2 = b;
+    pi_rc_4 = d;
+  }
+  else if (d == 9999)
+  {
+    pi_rc_1 = a;
+    pi_rc_2 = b;
+    pi_rc_3 = c;  
+  }
+  else
+  {
+    pi_rc_1 = a;
+    pi_rc_2 = b;
+    pi_rc_3 = c;
+    pi_rc_4 = d;
+  }  
+  //print out the values
+  myprintf("%d %d %d %d", pi_rc_1, pi_rc_2, pi_rc_3, pi_rc_4);
+}
+
+static void pi_channel_update() 
+{
+  char buf[255];
+  char out[255];
+  int chs;
+  int compareSum;
+  int tempVal[4];
+  int valBuffer[8];
+  int val[4];
+  int counter;
+  int buf_offset = 0;
+  int lastCheck;
+  
+  int totalBytes = hal.console->available();
+  if(totalBytes > 0) // check to see if data is present
+  {
+    counter = 0;
+    while(totalBytes > 0) // start loop with number of bytes
+    {
+      char c = (char)hal.console->read(); // read next byte    
+      if(c == '\n') // when \n is reached
+      {
+	out[0] = '\0'; //reset out char array
+        buf[buf_offset] = '\0'; // null terminator
+        // process data
+        char *chk = strtok(buf," "); //obtain checkSum
+        char *str = strtok(NULL," "); //str = roll,pitch,throttle,yaw
+        while (str != NULL) // loop to go through each token
+        {
+          strcat(out,str);
+          strcat(out," ");
+          valBuffer[counter++] = atoi(str); //saving values of each token as long
+          str = strtok(NULL," ");
+        }
+        
+        //Set string endings
+        out[strlen(out)-1] = '\0';
+
+        //calculate checksum and convert char chk into int
+        chs = checkSum(out);
+        compareSum = atoi(chk);
+        //compare checksum value with value from python
+        if (numbers(chk) == 0)
+        {
+          myprintf("CheckSum Failed");
+        }
+        else if (chs == compareSum)
+        {
+          //set channel values using val[] from while loop
+          for (int i=0;i<4;i++)
+          {
+            val[i] = valBuffer[i+1];
+            tempVal[i] = val[i];
+          }
+          update_channel(val[0], val[1], val[2], val[3]);
+        }
+        else
+        {
+          for(int i=0;i<4;i++)
+          {
+            valBuffer[i+1]=tempVal[i];
+          }
+          myprintf("CheckSum Failed");
+        }
+        buf_offset = 0; //reset buf_offset
+      }
+      else //c is not \n
+      {
+        buf[buf_offset++] = c; // store in buffer and continue until newline is found
+      }
+      
+      //decrease totalBytes for loop
+      totalBytes--;
+      out[0] = '\0'; //reset out char array 
+    }
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Checksum and updating channel values from the pi tracking system
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+>>>>>>> 0a91db6d1ae0a684b88898cbc3d5f3074c7e167b
 AP_HAL_MAIN();
 
