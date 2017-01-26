@@ -116,6 +116,90 @@ void AP_InertialNav::update(float dt)
         _hist_position_estimate_y.push_back(_position_base.y);
     }
 }
+void AP_InertialNav::update(float alt, float dt)
+{
+    // discard samples where dt is too large
+    if( dt > 0.1f ) {
+        return;
+    }
+
+    // decrement ignore error count if required
+    if (_flags.ignore_error > 0) {
+        _flags.ignore_error--;
+    }
+
+    // check if new baro readings have arrived and use them to correct vertical accelerometer offsets.
+    check_baro(alt);
+
+    // check if new gps readings have arrived and use them to correct position estimates
+    check_gps();
+
+    Vector3f accel_ef = _ahrs.get_accel_ef();
+
+    // remove influence of gravity
+    accel_ef.z += GRAVITY_MSS;
+    accel_ef *= 100.0f;
+
+    // remove xy if not enabled
+    if( !_xy_enabled ) {
+        accel_ef.x = 0.0f;
+        accel_ef.y = 0.0f;
+    }
+
+    //Convert North-East-Down to North-East-Up
+    accel_ef.z = -accel_ef.z;
+
+    // convert ef position error to horizontal body frame
+    Vector2f position_error_hbf;
+    position_error_hbf.x = _position_error.x * _ahrs.cos_yaw() + _position_error.y * _ahrs.sin_yaw();
+    position_error_hbf.y = -_position_error.x * _ahrs.sin_yaw() + _position_error.y * _ahrs.cos_yaw();
+
+    float tmp = _k3_xy * dt;
+    accel_correction_hbf.x += position_error_hbf.x * tmp;
+    accel_correction_hbf.y += position_error_hbf.y * tmp;
+    accel_correction_hbf.z += _position_error.z * _k3_z  * dt;
+
+    tmp = _k2_xy * dt;
+    _velocity.x += _position_error.x * tmp;
+    _velocity.y += _position_error.y * tmp;
+    _velocity.z += _position_error.z * _k2_z  * dt;
+
+    tmp = _k1_xy * dt;
+    _position_correction.x += _position_error.x * tmp;
+    _position_correction.y += _position_error.y * tmp;
+    _position_correction.z += _position_error.z * _k1_z  * dt;
+
+    // convert horizontal body frame accel correction to earth frame
+    Vector2f accel_correction_ef;
+    accel_correction_ef.x = accel_correction_hbf.x * _ahrs.cos_yaw() - accel_correction_hbf.y * _ahrs.sin_yaw();
+    accel_correction_ef.y = accel_correction_hbf.x * _ahrs.sin_yaw() + accel_correction_hbf.y * _ahrs.cos_yaw();
+
+    // calculate velocity increase adding new acceleration from accelerometers
+    Vector3f velocity_increase;
+    velocity_increase.x = (accel_ef.x + accel_correction_ef.x) * dt;
+    velocity_increase.y = (accel_ef.y + accel_correction_ef.y) * dt;
+    velocity_increase.z = (accel_ef.z + accel_correction_hbf.z) * dt;
+
+    // calculate new estimate of position
+    _position_base += (_velocity + velocity_increase*0.5) * dt;
+
+    // update the corrected position estimate
+    _position = _position_base + _position_correction;
+
+    // calculate new velocity
+    _velocity += velocity_increase;
+
+    // store 3rd order estimate (i.e. estimated vertical position) for future use
+    _hist_position_estimate_z.push_back(_position_base.z);
+
+    // store 3rd order estimate (i.e. horizontal position) for future use at 10hz
+    _historic_xy_counter++;
+    if( _historic_xy_counter >= AP_INTERTIALNAV_SAVE_POS_AFTER_ITERATIONS ) {
+        _historic_xy_counter = 0;
+        _hist_position_estimate_x.push_back(_position_base.x);
+        _hist_position_estimate_y.push_back(_position_base.y);
+    }
+}
 
 //
 // XY Axis specific methods
@@ -305,6 +389,20 @@ void AP_InertialNav::check_baro()
         _baro_last_update = baro_update_time;
     }
 }
+void AP_InertialNav::check_baro(float alt)
+{
+    uint32_t baro_update_time;
+
+    // calculate time since last baro reading (in ms)
+    baro_update_time = _baro.get_last_update();
+    if( baro_update_time != _baro_last_update ) {
+        const float dt = (float)(baro_update_time - _baro_last_update) * 0.001f; // in seconds
+        // call correction method
+        correct_with_baro(alt, dt);
+        _baro_last_update = baro_update_time;
+    }
+}
+
 
 
 // correct_with_baro - modifies accelerometer offsets using barometer.  dt is time since last baro reading

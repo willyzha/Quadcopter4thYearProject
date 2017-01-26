@@ -59,12 +59,12 @@
 #define STABILIZE_YAW_P     4.5
 
 #define ALT_HOLD_P         1.0
-#define THROTTLE_RATE_P    5.0
+#define THROTTLE_RATE_P    1.0//5.0
 
-#define THROTTLE_ACCEL_P      0.50
-#define THROTTLE_ACCEL_I      1.0
+#define THROTTLE_ACCEL_P      0.1//0.50
+#define THROTTLE_ACCEL_I      0.2//1.0
 #define THROTTLE_ACCEL_D      0.0
-#define THROTTLE_ACCEL_IMAX   10
+#define THROTTLE_ACCEL_IMAX   100
 
 #define LOITER_POS_P       1.0
 #define LOITER_RATE_P      1.0
@@ -85,8 +85,8 @@
 #define AUTO_DISARMING_DELAY    15  // called at 1hz so 15 seconds
 static uint8_t auto_disarming_counter;
 //////////////////////////////////////////////////////////////////////////////////////////////////
-#define PILOT_VELZ_MAX     10     // maximum vertical velocity in cm/s
-#define PILOT_ACCEL_Z      10     // vertical acceleration in cm/s/s while altitude is under pilot control
+#define PILOT_VELZ_MAX      10     // maximum vertical velocity in cm/s
+#define PILOT_ACCEL_Z       5     // vertical acceleration in cm/s/s while altitude is under pilot control
 
 #define LAND_DETECTOR_TRIGGER 50    // number of 50hz iterations with near zero climb rate and low throttle that triggers landing complete.
 #define LAND_DETECTOR_MAYBE_TRIGGER   10  // number of 50hz iterations with near zero climb rate and low throttle that means we might be landed (used to reset horizontal position targets to prevent tipping over)
@@ -148,13 +148,13 @@ static int16_t climb_rate;
 static int32_t baro_alt;            // barometer altitude in cm above home
 static float baro_climbrate;        // barometer climbrate in cm/s
 
-static int16_t sonar_alt;
+static float sonar_alt;
 static uint8_t sonar_alt_health;   // true if we can trust the altitude from the sonar
 static float target_sonar_alt;      // desired altitude in cm above the ground
 static struct   Location current_loc; // current location of the copter
 
 static uint16_t land_detector = LAND_DETECTOR_TRIGGER;  // we assume we are landed
-bool land_complete = true;
+bool land_complete = true;bool sonar300=true;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 static AP_Scheduler scheduler;
 /*
@@ -270,11 +270,16 @@ void loop()
 
   // Inertial Nav
   // read_inertia();
-    inertial_nav.update(G_Dt);
+
+    if(sonar_alt>=300){
+        inertial_nav.update(G_Dt);
+    }else{
+        inertial_nav.update(sonar_alt,G_Dt);
+    }
 
   // Run the attitude controllers    
   // update_flight_mode()
-    if(1){
+    if(0){
         stabilize_run();
     }else{
         althold_run();
@@ -324,6 +329,7 @@ static void althold_run(){
         attitude_control.set_yaw_target_to_current_heading();
         attitude_control.set_throttle_out(0, false);   
         pos_control.set_alt_target_to_current_alt();
+        //pos_control.set_alt_target_to_zero();
     }
     else{
       // Mix pid outputs and send to the motors.  
@@ -350,8 +356,9 @@ static void althold_run(){
       if(land_complete){
         attitude_control.relax_bf_rate_controller();
         attitude_control.set_yaw_target_to_current_heading();
-        attitude_control.set_throttle_out(0, false);   
-        pos_control.set_alt_target_to_current_alt();
+        attitude_control.set_throttle_out(0, false);  
+        pos_control.set_alt_target_to_current_alt(); 
+        //pos_control.set_alt_target_to_zero();
       }else{
         // call attitude controller
         attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
@@ -362,24 +369,22 @@ static void althold_run(){
                 //target_climb_rate = get_throttle_surface_tracking(target_climb_rate, pos_control.get_alt_target(), G_Dt);
         //}
         pos_control.set_alt_target_from_climb_rate(target_climb_rate, G_Dt);
-        pos_control.update_z_controller();
+        pos_control.update_z_controller(sonar_alt);
       }
+
+                hal.console->printf_P(
+                PSTR("sonaralt:%3.0fcm inertialalt:%3.0fcm alttarget:%3.0fcm   targetclimbrate:%3dcm/s  climbrate:%3dcm/s"      
+                    "  motorthrot:%4d  landed:%1d \n"),
+                        sonar_alt,
+                        inertial_nav.get_altitude(),
+                        pos_control.get_alt_target(),
+                        target_climb_rate,
+                        climb_rate,
+                        motors.get_throttle_out(),                        
+                        land_complete
+                        ); 
     }
 
-           hal.console->printf_P(
-                PSTR("r:%5.1f  p:%5.1f y:%5.1f comp=%.1f "
-                    "alt:%3.0fcm        climbrate:%6dcm/s   alttarget:%3.0fcm         rc1:%6d rc2:%6d rc3:%6d rc4:%6d\n"),
-                        ToDeg(ahrs.roll),
-                        ToDeg(ahrs.pitch),
-                        ToDeg(ahrs.yaw),
-                        ToDeg(compass.calculate_heading(ahrs.get_dcm_matrix())),
-                        baro_alt/1.0,
-                        target_climb_rate,
-                        pos_control.get_alt_target(),
-                        motors.armed(),
-                        rc_2.control_in,
-                        rc_3.control_in,
-                        rc_4.control_in);
 }
 
 static void rc_loop()
@@ -537,7 +542,7 @@ static void update_altitude()
         baro_climbrate = barometer.get_climb_rate() * 100.0f;
 
     // read in sonar altitude
-    //sonar_alt           = read_sonar();
+    sonar_alt           = read_sonar();
 
 }
 static void barometer_accumulate(void)
@@ -607,6 +612,32 @@ static void update_land_detector()
             land_complete = false;
         }
     }
+}
+
+static float read_sonar()
+{
+    // Turn off Barometer to avoid bus collisions
+  hal.gpio->pinMode(54, HAL_GPIO_OUTPUT);
+  hal.gpio->write(54,0);
+  hal.scheduler->delay_microseconds(2);
+  hal.gpio->write(54,1);
+  hal.scheduler->delay_microseconds(5);
+  hal.gpio->write(54,0);
+  
+  hal.gpio->pinMode(54, HAL_GPIO_INPUT);
+  uint8_t t = hal.gpio->read(54);
+  
+  
+  while (!t) {
+    t = hal.gpio->read(54);
+  }
+  uint32_t start = hal.scheduler->micros();  
+   while (t) {
+     t = hal.gpio->read(54);
+  }
+  uint32_t duration = hal.scheduler->micros() - start;
+  float distance = duration / 29 / 2;
+  return distance;
 }
 
 AP_HAL_MAIN();

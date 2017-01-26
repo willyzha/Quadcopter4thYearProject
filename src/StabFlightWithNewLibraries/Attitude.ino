@@ -90,7 +90,7 @@ static int16_t get_pilot_desired_climb_rate(int16_t throttle_control)
     // check throttle is above, below or in the deadband
     if (throttle_control < THROTTLE_IN_DEADBAND_BOTTOM) {
         // below the deadband
-        desired_rate = (int32_t) PILOT_VELZ_MAX * (throttle_control-THROTTLE_IN_DEADBAND_BOTTOM) / (THROTTLE_IN_MIDDLE - THR_DZ_DEFAULT);
+        desired_rate = (int32_t) 10*PILOT_VELZ_MAX * (throttle_control-THROTTLE_IN_DEADBAND_BOTTOM) / (THROTTLE_IN_MIDDLE - THR_DZ_DEFAULT);
     }else if (throttle_control > THROTTLE_IN_DEADBAND_TOP) {
         // above the deadband
         desired_rate = (int32_t) PILOT_VELZ_MAX * (throttle_control-THROTTLE_IN_DEADBAND_TOP) / (THROTTLE_IN_MIDDLE - THR_DZ_DEFAULT);

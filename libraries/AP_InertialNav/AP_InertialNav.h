@@ -69,6 +69,7 @@ public:
      * @param dt : time since last update in seconds
      */
     virtual void update(float dt);
+    virtual void update(float alt, float dt);
 
     //
     // XY Axis specific methods
@@ -224,6 +225,8 @@ protected:
      * @see correct_with_baro(float baro_alt, float dt);
      */
     void        check_baro();
+
+    void        check_baro(float alt);
 
     /**
      * correct_with_baro - calculates vertical position error using barometer.

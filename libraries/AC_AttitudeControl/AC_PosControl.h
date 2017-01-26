@@ -115,6 +115,7 @@ public:
     /// set_alt_target_to_current_alt - set altitude target to current altitude
     void set_alt_target_to_current_alt() { _pos_target.z = _inav.get_altitude(); }
 
+    void set_alt_target_to_zero() { _pos_target.z = 0; }
     /// get_alt_target, get_desired_alt - get desired altitude (in cm above home) from loiter or wp controller which should be fed into throttle controller
     /// To-Do: remove one of the two functions below
     float get_alt_target() const { return _pos_target.z; }
@@ -136,6 +137,7 @@ public:
 
     /// update_z_controller - fly to altitude in cm above home
     void update_z_controller();
+    void update_z_controller(float alt);
 
     // get_leash_down_z, get_leash_up_z - returns vertical leash lengths in cm
     float get_leash_down_z() const { return _leash_down_z; }
@@ -290,7 +292,7 @@ private:
     //          set_target_to_stopping_point_z
     //          init_takeoff
     void pos_to_rate_z();
-
+    void pos_to_rate_z(float alt);
     // rate_to_accel_z - calculates desired accel required to achieve the velocity target
     void rate_to_accel_z();
 
