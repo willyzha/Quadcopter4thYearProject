@@ -635,7 +635,6 @@ static void update_land_detector()
     }
 }
 
-<<<<<<< HEAD
 static float read_sonar()
 {
     // Turn off Barometer to avoid bus collisions
@@ -662,7 +661,6 @@ static float read_sonar()
   return distance;
 }
 
-=======
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Checksum and updating channel values from the pi tracking system
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -837,6 +835,5 @@ static void pi_channel_update()
 //Checksum and updating channel values from the pi tracking system
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
->>>>>>> 0a91db6d1ae0a684b88898cbc3d5f3074c7e167b
 AP_HAL_MAIN();
 
