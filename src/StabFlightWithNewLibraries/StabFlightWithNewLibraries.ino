@@ -59,7 +59,10 @@
 #define STABILIZE_PITCH_P   4.5
 #define STABILIZE_YAW_P     4.5
 
-#define ALT_HOLD_P         1.0
+#define ALT_HOLD_P         0.5
+#define ALT_HOLD_I         0.5
+#define ALT_HOLD_D         0.0
+#define ALT_HOLD_IMAX      100
 #define THROTTLE_RATE_P    1.0//5.0
 
 #define THROTTLE_ACCEL_P      0.1//0.50
@@ -97,6 +100,7 @@ static uint8_t auto_disarming_counter;
 #define LAND_DETECTOR_ROTATION_MAX 0.50f // vehicle rotation under 0.5 rad/sec is param to be considered landed
 
 #define THROTTLE_IN_MIDDLE 500.0          // the throttle mid point
+#define THROTTLE_HOVER 550.0        //estimated throttle to hover
 //////////////////////////////////////////////////////////////////////////////////////////////////
 const AP_HAL::HAL& hal = AP_HAL_AVR_APM2;
 static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_100HZ;
@@ -119,6 +123,7 @@ AC_P p_stabilize_roll(STABILIZE_ROLL_P);
 AC_P p_stabilize_pitch(STABILIZE_PITCH_P);
 AC_P p_stabilize_yaw(STABILIZE_YAW_P);
 
+AC_PID pid_hover(ALT_HOLD_P,ALT_HOLD_I,ALT_HOLD_D,ALT_HOLD_IMAX);
 AC_P p_alt_hold(ALT_HOLD_P);
 AC_P p_throttle_rate(THROTTLE_RATE_P);
 AC_PID pid_throttle_accel(THROTTLE_ACCEL_P, THROTTLE_ACCEL_I, THROTTLE_ACCEL_D, THROTTLE_ACCEL_IMAX);
@@ -148,6 +153,7 @@ AC_PosControl pos_control(ahrs, inertial_nav, motors, attitude_control,
                         p_loiter_pos, pid_loiter_rate_lat, pid_loiter_rate_lon);
 
 static float G_Dt = 0.02;
+static float takeoff=300.0;
 static uint32_t fast_loopTimer;
 
 static int16_t climb_rate;
@@ -317,7 +323,7 @@ static void stabilize_run(){
       // get pilot's desired yaw rate
       target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
       // get pilot's desired throttle
-      pilot_throttle_scaled = get_pilot_desired_throttle(rc_3.control_in);    
+      pilot_throttle_scaled = rc_3.control_in;    
 
       // call attitude controller
       attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
@@ -363,19 +369,20 @@ static void althold_run(){
       if(land_complete && target_climb_rate > 0){
           land_complete = false;
 
-          //set_throttle_takeoff()
-            // tell position controller to reset alt target and reset I terms
-            pos_control.init_takeoff();
+        //   //set_throttle_takeoff()
+        //     // tell position controller to reset alt target and reset I terms
+        //     pos_control.init_takeoff();
 
-            // tell motors to do a slow start
-            motors.slow_start(true);
+        //     // tell motors to do a slow start
+        //     motors.slow_start(true);
       }
 
       if(land_complete){
         attitude_control.relax_bf_rate_controller();
         attitude_control.set_yaw_target_to_current_heading();
         attitude_control.set_throttle_out(0, false);  
-        pos_control.set_alt_target_to_current_alt(); 
+        pos_control.set_alt_target_to_current_alt();
+        takeoff = 300.0; 
         //pos_control.set_alt_target_to_zero();
       }else{
         // call attitude controller
@@ -387,17 +394,28 @@ static void althold_run(){
                 //target_climb_rate = get_throttle_surface_tracking(target_climb_rate, pos_control.get_alt_target(), G_Dt);
         //}
         pos_control.set_alt_target_from_climb_rate(target_climb_rate, G_Dt);
-        pos_control.update_z_controller(sonar_alt);
+        //pos_control.update_z_controller(sonar_alt);
+
+        int32_t p=0;
+        int32_t i=0;
+        int32_t d=0;
+        if(takeoff>0){
+            takeoff-=0.2;
+        }else{
+            p = pid_hover.get_p(pos_control.get_alt_target()-sonar_alt);
+            i = pid_hover.get_i(pos_control.get_alt_target()-sonar_alt, G_Dt);
+            d = pid_hover.get_d(pos_control.get_alt_target()-sonar_alt, G_Dt);
+        }
+
+        attitude_control.set_throttle_out(constrain_int16((int16_t) p+i+d + THROTTLE_HOVER-takeoff,0,1000), true);
       }
 
                 hal.console->printf_P(
-                PSTR("sonaralt:%3.0fcm inertialalt:%3.0fcm alttarget:%3.0fcm   targetclimbrate:%3dcm/s  climbrate:%3dcm/s"      
+                PSTR("sonaralt:%3.0fcm alttarget:%3.0fcm   targetclimbrate:%3dcm/s "      
                     "  motorthrot:%4d  landed:%1d \n"),
                         sonar_alt,
-                        inertial_nav.get_altitude(),
                         pos_control.get_alt_target(),
                         target_climb_rate,
-                        climb_rate,
                         motors.get_throttle_out(),                        
                         land_complete
                         ); 
