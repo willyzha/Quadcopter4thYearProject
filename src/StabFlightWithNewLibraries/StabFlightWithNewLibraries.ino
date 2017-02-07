@@ -100,7 +100,7 @@ static uint8_t auto_disarming_counter;
 #define LAND_DETECTOR_ROTATION_MAX 0.50f // vehicle rotation under 0.5 rad/sec is param to be considered landed
 
 #define THROTTLE_IN_MIDDLE 500.0          // the throttle mid point
-#define THROTTLE_HOVER 550.0        //estimated throttle to hover
+#define THROTTLE_HOVER 420.0        //estimated throttle to hover
 //////////////////////////////////////////////////////////////////////////////////////////////////
 const AP_HAL::HAL& hal = AP_HAL_AVR_APM2;
 static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_100HZ;
@@ -186,9 +186,7 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { throttle_loop,         2,     450 },
     { arm_motors_check,     10,      10 },    
     { update_altitude,      10,    1000 },    
-    { barometer_accumulate,  2,     250 },
-    { update_compass,       10,     720 },
-    { compass_accumulate,    2,     420 }
+    { barometer_accumulate,  2,     250 }
   };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -217,10 +215,6 @@ void setup()
     rc_2.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
     rc_4.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
 
-    if (compass.init() && compass.read()) {
-      ahrs.set_compass(&compass);
-    }
-
     attitude_control.set_dt(MAIN_LOOP_SECONDS);
 
     inertial_nav.init();
@@ -230,7 +224,6 @@ void setup()
   
   //startup_ground(true);
     ahrs.init();
-    ahrs.set_vehicle_class(AHRS_VEHICLE_COPTER);
 
     ins.init(AP_InertialSensor::COLD_START, ins_sample_rate);
     ins.init_accel();
@@ -262,27 +255,18 @@ void loop()
 {
     ins.wait_for_sample();
     uint32_t timer = hal.scheduler->micros();
-
     // used by PI Loops
     G_Dt                    = (float)(timer - fast_loopTimer) / 1000000.f;
     fast_loopTimer          = timer;
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////    
-//fast_loop()
-  // IMU DCM Algorithm
-  // read_AHRS();
     ahrs.update();
-
   // Run low level rate controllers that only require IMU data
     attitude_control.rate_controller_run();
 
   // Write out the servo PWM values
-  // set_servos_4();
     motors.output();
 
   // Inertial Nav
-  // read_inertia();
-
     if(sonar_alt>=300){
         inertial_nav.update(G_Dt);
     }else{
@@ -290,21 +274,17 @@ void loop()
     }
 
   // Run the attitude controllers    
-  // update_flight_mode()
     if(0){
         stabilize_run();
     }else{
         althold_run();
     }
      
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     scheduler.tick();
-
     uint32_t time_available = (timer + MAIN_LOOP_MICROS) - hal.scheduler->micros();
     scheduler.run(time_available);
-
 }
+
 static void stabilize_run(){
     int16_t target_roll, target_pitch;
     float target_yaw_rate;
@@ -339,9 +319,9 @@ static void althold_run(){
     if(!motors.armed()){
         attitude_control.relax_bf_rate_controller();
         attitude_control.set_yaw_target_to_current_heading();
-        attitude_control.set_throttle_out(0, false);   
-        pos_control.set_alt_target_to_current_alt();
-        //pos_control.set_alt_target_to_zero();
+        attitude_control.set_throttle_out(0, false);
+        pos_control.set_alt_target(sonar_alt);   
+        //pos_control.set_alt_target_to_current_alt();
     }
     else{
       // Mix pid outputs and send to the motors.  
@@ -368,39 +348,30 @@ static void althold_run(){
       
       if(land_complete && target_climb_rate > 0){
           land_complete = false;
-
-        //   //set_throttle_takeoff()
-        //     // tell position controller to reset alt target and reset I terms
-        //     pos_control.init_takeoff();
-
-        //     // tell motors to do a slow start
-        //     motors.slow_start(true);
       }
 
       if(land_complete){
         attitude_control.relax_bf_rate_controller();
         attitude_control.set_yaw_target_to_current_heading();
         attitude_control.set_throttle_out(0, false);  
-        pos_control.set_alt_target_to_current_alt();
+        pos_control.set_alt_target(sonar_alt);
         takeoff = 300.0; 
-        //pos_control.set_alt_target_to_zero();
       }else{
         // call attitude controller
         attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
 
-        // call throttle controller
-        //if (sonar_alt_health >= SONAR_ALT_HEALTH_MAX) {
-                // if sonar is ok, use surface tracking
-                //target_climb_rate = get_throttle_surface_tracking(target_climb_rate, pos_control.get_alt_target(), G_Dt);
-        //}
-        pos_control.set_alt_target_from_climb_rate(target_climb_rate, G_Dt);
-        //pos_control.update_z_controller(sonar_alt);
+        if(target_climb_rate==0){            
+            pos_control.set_alt_target(sonar_alt);
+        }else{
+            pos_control.set_alt_target_from_climb_rate(target_climb_rate, G_Dt);
+        }
 
         int32_t p=0;
         int32_t i=0;
         int32_t d=0;
         if(takeoff>0){
-            takeoff-=0.2;
+            //slowly ramp up throttle for smooth takeoff
+            takeoff-=0.3;
         }else{
             p = pid_hover.get_p(pos_control.get_alt_target()-sonar_alt);
             i = pid_hover.get_i(pos_control.get_alt_target()-sonar_alt, G_Dt);
@@ -412,12 +383,13 @@ static void althold_run(){
 
                 hal.console->printf_P(
                 PSTR("sonaralt:%3.0fcm alttarget:%3.0fcm   targetclimbrate:%3dcm/s "      
-                    "  motorthrot:%4d  landed:%1d \n"),
+                    "  motorthrot:%4d  landed:%1d targyawrate:%5.0f\n"),
                         sonar_alt,
                         pos_control.get_alt_target(),
                         target_climb_rate,
                         motors.get_throttle_out(),                        
-                        land_complete
+                        land_complete,
+                        target_yaw_rate
                         ); 
     }
 
@@ -432,6 +404,7 @@ static void rc_loop()
  // Update the channel using values obtained from pi
  pi_channel_update();
 }
+
 // throttle_loop - should be run at 50 hz
 static void throttle_loop()
 {
@@ -587,16 +560,6 @@ static void update_altitude()
 static void barometer_accumulate(void)
 {
     barometer.accumulate();
-}
-
-static void update_compass(void)
-{
-    compass.set_throttle((float)rc_3.servo_out/1000.0f);
-    compass.read();    
-}
-static void compass_accumulate(void)
-{
-    compass.accumulate();    
 }
 
 static void read_radio()
