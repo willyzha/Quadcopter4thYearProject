@@ -109,6 +109,7 @@ RC_Channel rc_1(CH_1);
 RC_Channel rc_2(CH_2); 
 RC_Channel rc_3(CH_3); 
 RC_Channel rc_4(CH_4);
+RC_Channel rc_5(CH_5);
 
 int pi_rc_1;
 int pi_rc_2;
@@ -161,12 +162,13 @@ static int32_t baro_alt;            // barometer altitude in cm above home
 static float baro_climbrate;        // barometer climbrate in cm/s
 
 static float sonar_alt;
-static uint8_t sonar_alt_health;   // true if we can trust the altitude from the sonar
-static float target_sonar_alt;      // desired altitude in cm above the ground
+static float deadband_alt;
 static struct   Location current_loc; // current location of the copter
 
 static uint16_t land_detector = LAND_DETECTOR_TRIGGER;  // we assume we are landed
-bool land_complete = true;bool sonar300=true;
+bool land_complete = true;
+
+static uint8_t oldSwitchPosition;
 //////////////////////////////////////////////////////////////////////////////////////////////////
 static AP_Scheduler scheduler;
 /*
@@ -214,6 +216,8 @@ void setup()
     rc_1.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
     rc_2.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
     rc_4.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
+    
+    rc_5.set_range(0,1000);
 
     attitude_control.set_dt(MAIN_LOOP_SECONDS);
 
@@ -231,6 +235,7 @@ void setup()
     ahrs.reset_gyro_drift();
     ahrs.set_fast_gains(true);
     land_complete=true;
+    reset_control_switch();
 
    //init_rc_out();              // sets up motors and output to escs
     motors.set_update_rate(RC_FAST_SPEED);
@@ -274,7 +279,7 @@ void loop()
     }
 
   // Run the attitude controllers    
-    if(0){
+    if(0){//oldSwitchPosition){
         stabilize_run();
     }else{
         althold_run();
@@ -361,17 +366,20 @@ static void althold_run(){
         attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
 
         if(target_climb_rate==0){            
-            pos_control.set_alt_target(sonar_alt);
+            pos_control.set_alt_target(deadband_alt);
         }else{
             pos_control.set_alt_target_from_climb_rate(target_climb_rate, G_Dt);
+            deadband_alt = sonar_alt;
         }
 
         int32_t p=0;
         int32_t i=0;
         int32_t d=0;
         if(takeoff>0){
-            //slowly ramp up throttle for smooth takeoff
-            takeoff-=0.3;
+            // slowly ramp up throttle for smooth takeoff
+            takeoff-=0.3;        
+            // keep target altitude the sonar alt until takeoff occurs    
+            pos_control.set_alt_target(sonar_alt);
         }else{
             p = pid_hover.get_p(pos_control.get_alt_target()-sonar_alt);
             i = pid_hover.get_i(pos_control.get_alt_target()-sonar_alt, G_Dt);
@@ -383,13 +391,14 @@ static void althold_run(){
 
                 hal.console->printf_P(
                 PSTR("sonaralt:%3.0fcm alttarget:%3.0fcm   targetclimbrate:%3dcm/s "      
-                    "  motorthrot:%4d  landed:%1d targyawrate:%5.0f\n"),
+                    "  motorthrot:%4d  landed:%1d rc5:%5d switchpos:%2d \n"),
                         sonar_alt,
                         pos_control.get_alt_target(),
                         target_climb_rate,
                         motors.get_throttle_out(),                        
                         land_complete,
-                        target_yaw_rate
+                        rc_5.radio_in,
+                        oldSwitchPosition
                         ); 
     }
 
@@ -399,7 +408,7 @@ static void rc_loop()
 {
  // Read radio and 3-position switch on radio
  read_radio();
- //read_control_switch();
+ read_control_switch();
  
  // Update the channel using values obtained from pi
  pi_channel_update();
@@ -568,6 +577,46 @@ static void read_radio()
     rc_2.set_pwm(hal.rcin->read(CH_2));
     rc_3.set_pwm(hal.rcin->read(CH_3));
     rc_4.set_pwm(hal.rcin->read(CH_4));
+    rc_5.set_pwm(hal.rcin->read(CH_5));
+}
+#define CONTROL_SWITCH_COUNTER  20  // 20 iterations at 100hz (i.e. 2/10th of a second) at a new switch position will cause flight mode change
+static void read_control_switch()
+{
+    static uint8_t switch_counter = 0;
+
+    uint8_t switchPosition = readSwitch();
+
+    // has switch moved?
+    if (oldSwitchPosition != switchPosition) {
+        switch_counter++;
+        if(switch_counter >= CONTROL_SWITCH_COUNTER) {
+            oldSwitchPosition       = switchPosition;
+            switch_counter          = 0;
+
+            // set flight mode 
+
+        }
+    }else{
+        // reset switch_counter if there's been no change
+        // we don't want 10 intermittant blips causing a flight mode change
+        switch_counter = 0;
+    }
+}
+static uint8_t readSwitch(void){
+    int16_t pulsewidth = rc_5.radio_in;   
+
+    if (pulsewidth < 1231) return 0;
+    if (pulsewidth < 1361) return 1;
+    if (pulsewidth < 1491) return 2;
+    if (pulsewidth < 1621) return 3;
+    if (pulsewidth < 1750) return 4;        // Software Manual
+    return 5;                               // Hardware Manual
+}
+
+static void reset_control_switch()
+{
+    oldSwitchPosition = -1;
+    read_control_switch();
 }
 
 static void althold_init()
@@ -731,7 +780,7 @@ static void update_channel(int a, int b, int c, int d)
     pi_rc_4 = d;
   }  
   //print out the values
-  myprintf("%d %d %d %d", pi_rc_1, pi_rc_2, pi_rc_3, pi_rc_4);
+  //myprintf("%d %d %d %d", pi_rc_1, pi_rc_2, pi_rc_3, pi_rc_4);
 }
 
 static void pi_channel_update() 
