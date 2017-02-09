@@ -111,10 +111,9 @@ RC_Channel rc_3(CH_3);
 RC_Channel rc_4(CH_4);
 RC_Channel rc_5(CH_5);
 
-int pi_rc_1;
-int pi_rc_2;
-int pi_rc_3;
-int pi_rc_4;
+int pi_pitch;
+int pi_throttle;
+int pi_yaw;
 
 AC_PID pid_rate_roll(RATE_ROLL_P, RATE_ROLL_I,  RATE_ROLL_D, RATE_ROLL_IMAX);
 AC_PID pid_rate_pitch(RATE_PITCH_P, RATE_PITCH_I, RATE_PITCH_D, RATE_PITCH_IMAX);
@@ -255,6 +254,33 @@ void setup()
     scheduler.init(&scheduler_tasks[0], sizeof(scheduler_tasks)/sizeof(scheduler_tasks[0]));
 }
 
+void myprintf(const char *format, ...) {
+	va_list arg;
+	int checksum;
+	char str[32];
+	char output[255];
+	char buff[5];
+  char calc[255];
+
+  str[0] = '\0';
+  output[0] = '\0';
+  buff[0] = '\0';
+  calc[0] = '\0';
+        
+	va_start (arg, format);
+	hal.util->vsnprintf(str, sizeof(str), format, arg);
+  strcat(calc,"Flag: ");
+  strcat(calc,str);
+	checksum = checkSum(calc);
+	itoa(checksum, buff, 10);
+  strcat(output,"\n");
+	strcat(output, buff);
+	strcat(output, " ");
+  strcat(output, "Flag: ");
+	strcat(output, str);
+	hal.console->printf(output, arg);
+	va_end(arg);
+}
 
 void loop() 
 {
@@ -279,7 +305,7 @@ void loop()
     }
 
   // Run the attitude controllers    
-    if(0){//oldSwitchPosition){
+    if(0){//oldSwitchPosition)
         stabilize_run();
     }else{
         althold_run();
@@ -302,14 +328,25 @@ static void stabilize_run(){
     }
     else{
       // Mix pid outputs and send to the motors
-
+      if (1)
+      {
       // get pilot's desired lean angles   
       get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
       // get pilot's desired yaw rate
       target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
       // get pilot's desired throttle
       pilot_throttle_scaled = rc_3.control_in;    
-
+      }
+      else
+      {
+        // get pilot's desired lean angles   
+        get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
+        // get pilot's desired yaw rate
+        target_yaw_rate = pi_yaw;
+        // get pilot's desired throttle
+        pilot_throttle_scaled = rc_3.control_in;           
+        myprintf("Pitch: %d, Yaw: %d, Throttle: %d",pi_pitch,pi_throttle,pi_yaw);
+      }
       // call attitude controller
       attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
       // output pilot's throttle
@@ -336,19 +373,19 @@ static void althold_run(){
         get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
         // get pilot's desired yaw rate
         target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
-  
         // get pilot desired climb rate 
         target_climb_rate = get_pilot_desired_climb_rate(rc_3.control_in);
       }
       else
       {
         // get pilot's desired lean angles 
-        get_pilot_desired_lean_angles(pi_rc_1, pi_rc_2, target_roll, target_pitch);
+        get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
         // get pilot's desired yaw rate
-        target_yaw_rate = get_pilot_desired_yaw_rate(pi_rc_4);
+        target_yaw_rate = pi_yaw;
   
         // get pilot desired climb rate 
-        target_climb_rate = get_pilot_desired_climb_rate(pi_rc_3);
+        target_climb_rate = get_pilot_desired_climb_rate(rc_3.control_in);
+        myprintf("Pitch: %d, Yaw: %d, Throttle: %d",pi_pitch,pi_throttle,pi_yaw);
       }
       
       if(land_complete && target_climb_rate > 0){
@@ -695,33 +732,6 @@ static float read_sonar()
 //Checksum and updating channel values from the pi tracking system
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void myprintf(const char *format, ...) {
-	va_list arg;
-	int checksum;
-	char str[32];
-	char output[255];
-	char buff[5];
-        char calc[255];
-
-        str[0] = '\0';
-        output[0] = '\0';
-        buff[0] = '\0';
-        calc[0] = '\0';
-        
-	va_start (arg, format);
-	hal.util->vsnprintf(str, sizeof(str), format, arg);
-        strcat(calc,"Flag: ");
-        strcat(calc,str);
-	checksum = checkSum(calc);
-	itoa(checksum, buff, 10);
-        strcat(output,"\n");
-	strcat(output, buff);
-	strcat(output, " ");
-        strcat(output, "Flag: ");
-	strcat(output, str);
-	hal.console->printf(output, arg);
-	va_end(arg);
-}
 
 int checkSum(char *str)
 {
@@ -746,41 +756,29 @@ int numbers(char *c)
  return 1;
 }
 
-static void update_channel(int a, int b, int c, int d)
+static void update_channel(int a, int b, int c)
 {  
   if (a == 9999)
   {
-    pi_rc_2 = b;
-    pi_rc_3 = c;
-    pi_rc_4 = d;
+    pi_throttle = b;
+    pi_pitch = c;
   }
   else if (b == 9999)
   {
-    pi_rc_1 = a;
-    pi_rc_3 = c;
-    pi_rc_4 = d;          
+    pi_yaw = a;
+    pi_pitch = c;          
   }
   else if (c == 9999)
   {
-    pi_rc_1 = a;
-    pi_rc_2 = b;
-    pi_rc_4 = d;
-  }
-  else if (d == 9999)
-  {
-    pi_rc_1 = a;
-    pi_rc_2 = b;
-    pi_rc_3 = c;  
+    pi_yaw = a;
+    pi_throttle = b;
   }
   else
   {
-    pi_rc_1 = a;
-    pi_rc_2 = b;
-    pi_rc_3 = c;
-    pi_rc_4 = d;
-  }  
-  //print out the values
-  //myprintf("%d %d %d %d", pi_rc_1, pi_rc_2, pi_rc_3, pi_rc_4);
+    pi_yaw = a;
+    pi_throttle = b;
+    pi_pitch = c;
+  }
 }
 
 static void pi_channel_update() 
@@ -805,7 +803,7 @@ static void pi_channel_update()
       char c = (char)hal.console->read(); // read next byte    
       if(c == '\n') // when \n is reached
       {
-	out[0] = '\0'; //reset out char array
+	      out[0] = '\0'; //reset out char array
         buf[buf_offset] = '\0'; // null terminator
         // process data
         char *chk = strtok(buf," "); //obtain checkSum
@@ -832,16 +830,16 @@ static void pi_channel_update()
         else if (chs == compareSum)
         {
           //set channel values using val[] from while loop
-          for (int i=0;i<4;i++)
+          for (int i=0;i<3;i++)
           {
             val[i] = valBuffer[i+1];
             tempVal[i] = val[i];
           }
-          update_channel(val[0], val[1], val[2], val[3]);
+          update_channel(val[0], val[1], val[2]);
         }
-        else
+        else // if checksum fails then keep keep previous accepted values in buffer
         {
-          for(int i=0;i<4;i++)
+          for(int i=0;i<3;i++)
           {
             valBuffer[i+1]=tempVal[i];
           }
