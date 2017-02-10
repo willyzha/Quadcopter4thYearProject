@@ -59,8 +59,8 @@
 #define STABILIZE_PITCH_P   4.5
 #define STABILIZE_YAW_P     4.5
 
-#define ALT_HOLD_P         0.5
-#define ALT_HOLD_I         0.5
+#define ALT_HOLD_P         0.3
+#define ALT_HOLD_I         0.1
 #define ALT_HOLD_D         0.0
 #define ALT_HOLD_IMAX      100
 #define THROTTLE_RATE_P    1.0//5.0
@@ -110,6 +110,7 @@ RC_Channel rc_2(CH_2);
 RC_Channel rc_3(CH_3); 
 RC_Channel rc_4(CH_4);
 RC_Channel rc_5(CH_5);
+RC_Channel rc_6(CH_6);
 
 int pi_pitch;
 int pi_throttle;
@@ -217,9 +218,13 @@ void setup()
     rc_4.set_type(RC_CHANNEL_TYPE_ANGLE_RAW);
     
     rc_5.set_range(0,1000);
+    rc_6.set_range(0,1000);
 
     attitude_control.set_dt(MAIN_LOOP_SECONDS);
-
+    // initialising pi values
+    pi_yaw = 0;
+    pi_pitch = 0;
+    pi_throttle = 0;
     inertial_nav.init();
 
     //init_baromter(true);  
@@ -255,31 +260,30 @@ void setup()
 }
 
 void myprintf(const char *format, ...) {
-	va_list arg;
-	int checksum;
-	char str[32];
-	char output[255];
-	char buff[5];
+  va_list arg;
+  int checksum;
+  char str[255];
+  char output[255];
+  char buff[5];
   char calc[255];
 
   str[0] = '\0';
   output[0] = '\0';
   buff[0] = '\0';
   calc[0] = '\0';
-        
-	va_start (arg, format);
-	hal.util->vsnprintf(str, sizeof(str), format, arg);
+  va_start (arg, format);
+  hal.util->vsnprintf(str, sizeof(str), format, arg);
   strcat(calc,"Flag: ");
   strcat(calc,str);
-	checksum = checkSum(calc);
-	itoa(checksum, buff, 10);
+  checksum = checkSum(calc);
+  itoa(checksum, buff, 10);
   strcat(output,"\n");
-	strcat(output, buff);
-	strcat(output, " ");
+  strcat(output, buff);
+  strcat(output, " ");
   strcat(output, "Flag: ");
-	strcat(output, str);
-	hal.console->printf(output, arg);
-	va_end(arg);
+  strcat(output, str);
+  hal.console->printf(output, arg);
+  va_end(arg);
 }
 
 void loop() 
@@ -328,25 +332,14 @@ static void stabilize_run(){
     }
     else{
       // Mix pid outputs and send to the motors
-      if (1)
-      {
+
       // get pilot's desired lean angles   
       get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
       // get pilot's desired yaw rate
       target_yaw_rate = get_pilot_desired_yaw_rate(rc_4.control_in);
       // get pilot's desired throttle
       pilot_throttle_scaled = rc_3.control_in;    
-      }
-      else
-      {
-        // get pilot's desired lean angles   
-        get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
-        // get pilot's desired yaw rate
-        target_yaw_rate = pi_yaw;
-        // get pilot's desired throttle
-        pilot_throttle_scaled = rc_3.control_in;           
-        myprintf("Pitch: %d, Yaw: %d, Throttle: %d",pi_pitch,pi_throttle,pi_yaw);
-      }
+
       // call attitude controller
       attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
       // output pilot's throttle
@@ -367,7 +360,7 @@ static void althold_run(){
     }
     else{
       // Mix pid outputs and send to the motors.  
-      if(1)
+      if(oldSwitchPosition == 0)
       {
         // get pilot's desired lean angles 
         get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
@@ -382,10 +375,11 @@ static void althold_run(){
         get_pilot_desired_lean_angles(rc_1.control_in, rc_2.control_in, target_roll, target_pitch);
         // get pilot's desired yaw rate
         target_yaw_rate = pi_yaw;
+        float target_yaw_rate2 = get_pilot_desired_yaw_rate(rc_4.control_in);
   
         // get pilot desired climb rate 
         target_climb_rate = get_pilot_desired_climb_rate(rc_3.control_in);
-        myprintf("Pitch: %d, Yaw: %d, Throttle: %d",pi_pitch,pi_throttle,pi_yaw);
+        myprintf("Pitch: %d, Throttle:%d, Piyaw:%d contYaw:%5.0f",pi_pitch,pi_throttle,pi_yaw, target_yaw_rate2);
       }
       
       if(land_complete && target_climb_rate > 0){
@@ -398,6 +392,7 @@ static void althold_run(){
         attitude_control.set_throttle_out(0, false);  
         pos_control.set_alt_target(sonar_alt);
         takeoff = 300.0; 
+        pid_hover.reset_I();
       }else{
         // call attitude controller
         attitude_control.angle_ef_roll_pitch_rate_ef_yaw_smooth(target_roll, target_pitch, target_yaw_rate, get_smoothing_gain());
@@ -426,7 +421,18 @@ static void althold_run(){
         attitude_control.set_throttle_out(constrain_int16((int16_t) p+i+d + THROTTLE_HOVER-takeoff,0,1000), true);
       }
 
-                hal.console->printf_P(
+                /*myprintf(
+                "sonaralt:%3.0fcm alttarget:%3.0fcm   targetclimbrate:%3dcm/s "      
+                    "  motorthrot:%4d  landed:%1d rc5:%5d switchpos:%2d \n",
+                        sonar_alt,
+                        pos_control.get_alt_target(),
+                        target_climb_rate,
+                        motors.get_throttle_out(),                        
+                        land_complete,
+                        rc_5.radio_in,
+                        oldSwitchPosition
+                        );*/
+                /*hal.console->printf_P(
                 PSTR("sonaralt:%3.0fcm alttarget:%3.0fcm   targetclimbrate:%3dcm/s "      
                     "  motorthrot:%4d  landed:%1d rc5:%5d switchpos:%2d \n"),
                         sonar_alt,
@@ -436,7 +442,7 @@ static void althold_run(){
                         land_complete,
                         rc_5.radio_in,
                         oldSwitchPosition
-                        ); 
+                        ); */
     }
 
 }
@@ -448,7 +454,7 @@ static void rc_loop()
  read_control_switch();
  
  // Update the channel using values obtained from pi
- pi_channel_update();
+  pi_channel_update();
 }
 
 // throttle_loop - should be run at 50 hz
@@ -615,6 +621,7 @@ static void read_radio()
     rc_3.set_pwm(hal.rcin->read(CH_3));
     rc_4.set_pwm(hal.rcin->read(CH_4));
     rc_5.set_pwm(hal.rcin->read(CH_5));
+    rc_6.set_pwm(hal.rcin->read(CH_6));
 }
 #define CONTROL_SWITCH_COUNTER  20  // 20 iterations at 100hz (i.e. 2/10th of a second) at a new switch position will cause flight mode change
 static void read_control_switch()
@@ -803,25 +810,31 @@ static void pi_channel_update()
       char c = (char)hal.console->read(); // read next byte    
       if(c == '\n') // when \n is reached
       {
-	      out[0] = '\0'; //reset out char array
+	out[0] = '\0'; //reset out char array
         buf[buf_offset] = '\0'; // null terminator
         // process data
         char *chk = strtok(buf," "); //obtain checkSum
         char *str = strtok(NULL," "); //str = roll,pitch,throttle,yaw
         while (str != NULL) // loop to go through each token
         {
+          //myprintf("str:%s",str);
           strcat(out,str);
           strcat(out," ");
-          valBuffer[counter++] = atoi(str); //saving values of each token as long
+          valBuffer[counter] = atoi(str); //saving values of each token as long
           str = strtok(NULL," ");
+          //myprintf("val:%d",valBuffer[counter]);
+          //myprintf("counter:%d",counter);
+          counter++;
         }
         
         //Set string endings
         out[strlen(out)-1] = '\0';
-
+        //myprintf("out:%s",out);
         //calculate checksum and convert char chk into int
         chs = checkSum(out);
+        //myprintf("chs:%d",chs);
         compareSum = atoi(chk);
+        //myprintf("compareSum:%d",compareSum);
         //compare checksum value with value from python
         if (numbers(chk) == 0)
         {
@@ -832,7 +845,7 @@ static void pi_channel_update()
           //set channel values using val[] from while loop
           for (int i=0;i<3;i++)
           {
-            val[i] = valBuffer[i+1];
+            val[i] = valBuffer[i];
             tempVal[i] = val[i];
           }
           update_channel(val[0], val[1], val[2]);
@@ -841,7 +854,7 @@ static void pi_channel_update()
         {
           for(int i=0;i<3;i++)
           {
-            valBuffer[i+1]=tempVal[i];
+            valBuffer[i]=tempVal[i];
           }
           myprintf("CheckSum Failed");
         }
