@@ -39,6 +39,8 @@
 #include <AC_P.h>
 #include <ctype.h>
 
+#include "StabFlight.h"
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 #define RATE_ROLL_P     0.11
 #define RATE_ROLL_I     0.1
@@ -142,6 +144,8 @@ static GPS_Glitch gps_glitch(gps);
 
 AP_AHRS_DCM  ahrs(ins, barometer, gps);
 
+AP_HAL::AnalogSource* ch;
+
 static AP_Vehicle::MultiCopter aparm;
 static AP_MotorsQuad motors(rc_1, rc_2, rc_3, rc_4);
 AC_AttitudeControl attitude_control(ahrs, aparm, motors, p_stabilize_roll, p_stabilize_pitch, p_stabilize_yaw,
@@ -156,11 +160,12 @@ AC_PosControl pos_control(ahrs, inertial_nav, motors, attitude_control,
 static float G_Dt = 0.02;
 static float takeoff=300.0;
 static uint32_t fast_loopTimer;
-
+static int8_t pin;
 static int16_t climb_rate;
 static int32_t baro_alt;            // barometer altitude in cm above home
 static float baro_climbrate;        // barometer climbrate in cm/s
 
+static int battery_status;
 static float sonar_alt;
 static float deadband_alt;
 static struct   Location current_loc; // current location of the copter
@@ -195,6 +200,10 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
 
 void setup() 
 {
+    //setting up the battery listening channel
+    // battery level is connected to A(4) -5th pin on top row
+    ch = hal.analogin->channel(4);
+  
     // Load the default values of variables listed in var_info[]s
     AP_Param::setup_sketch_defaults();
 
@@ -257,6 +266,8 @@ void setup()
     
 // initialise the main loop scheduler
     scheduler.init(&scheduler_tasks[0], sizeof(scheduler_tasks)/sizeof(scheduler_tasks[0]));
+    
+
 }
 
 void myprintf(const char *format, ...) {
@@ -314,6 +325,7 @@ void loop()
     }else{
         althold_run();
     }
+    
      
     scheduler.tick();
     uint32_t time_available = (timer + MAIN_LOOP_MICROS) - hal.scheduler->micros();
@@ -607,6 +619,9 @@ static void update_altitude()
 
     // read in sonar altitude
     sonar_alt           = read_sonar();
+    
+    //read battery status
+    read_battery();
 
 }
 static void barometer_accumulate(void)
@@ -734,6 +749,41 @@ static float read_sonar()
   float distance = duration / 29 / 2;
   return distance;
 }
+
+void read_battery()
+{
+  const int batt_filter_sample_size = 10;
+  float v_level;
+  float v_sum=0;
+  for (int i = 0; i < batt_filter_sample_size; i ++)
+  {
+    v_sum+=ch->voltage_average();
+  }
+  
+  v_level = v_sum/batt_filter_sample_size;
+  
+  if (v_level > 3.27)
+  {
+    battery_status = Critical_Too_High;
+  } 
+  else if (v_level <= 3.27 && v_level > 2.82)
+  {
+    battery_status = Nominal;
+  }
+  else if (v_level <= 2.82 && v_level > 2.41)
+  {
+    battery_status = Warning;
+  }
+  else if (v_level <= 2.41)
+  {
+    battery_status = Critical_Too_Low;
+  }
+  else
+  {
+    battery_status = Unknown;
+  }
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Checksum and updating channel values from the pi tracking system
